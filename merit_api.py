@@ -80,6 +80,8 @@ class MeritAPI:
         self.assets = Assets(self)
         self.taxes = Taxes(self)
         self.dimensions = Dimensions(self)
+        self.master_data = MasterData(self)
+        self.reports = Reports(self)
 
     def _serialize_body(self, body: Dict[str, Any]) -> str:
         """Serialize request body in a deterministic way for signing."""
@@ -389,9 +391,21 @@ class Sales(Namespace):
         """Get list of sales offers."""
         return self._client._post("getsalesoffers", kwargs)
 
+    def get_offer(self, id: str) -> Dict:
+        """Get sales offer details."""
+        return self._client._post("getsalesoffer", {"Id": id})
+
     def get_recurring_invoices(self, **kwargs) -> List[Dict]:
         """Get recurring invoices."""
         return self._client._post("getrecurringinvoices", kwargs)
+
+    def get_recurring_invoice(self, id: str) -> Dict:
+        """Get recurring invoice details."""
+        return self._client._post("getrecurringinvoice", {"Id": id})
+
+    def get_recurring_invoice_addresses(self, **kwargs) -> List[Dict]:
+        """Get recurring invoice clients address list."""
+        return self._client._post("getrecurringinvoiceaddresses", kwargs)
 
 
 class Purchases(Namespace):
@@ -403,11 +417,35 @@ class Purchases(Namespace):
         """Create a purchase invoice."""
         return self._client._post("sendpurchaseinvoice", invoice)
 
+    def get_invoice(self, id: str) -> Dict:
+        """Get purchase invoice details."""
+        return self._client._post("getpurchaseinvoice", {"Id": id})
+
+    def get_orders(self, **kwargs) -> List[Dict]:
+        """Get purchase orders list."""
+        return self._client._post("getpurchaseorders", kwargs)
+
 
 class Financial(Namespace):
     def get_payments(self, **kwargs) -> List[Dict]:
         """Get payments. Required: PeriodStart, PeriodEnd."""
         return self._client._post("getpayments", kwargs)
+
+    def get_payment_types(self, **kwargs) -> List[Dict]:
+        """List payment types."""
+        return self._client._post("getpaymenttypes", kwargs)
+
+    def get_payment_imports(self, **kwargs) -> List[Dict]:
+        """Get payment imports list."""
+        return self._client._post("getpaymentimports", kwargs)
+
+    def get_expense_payments(self, **kwargs) -> List[Dict]:
+        """Get expense payments list."""
+        return self._client._post("getexpensepayments", kwargs)
+
+    def get_income_payments(self, **kwargs) -> List[Dict]:
+        """Get income payments list."""
+        return self._client._post("getincomepayments", kwargs)
 
     def create_payment(self, payment: Dict[str, Any]) -> Dict:
         """Create a payment."""
@@ -416,6 +454,14 @@ class Financial(Namespace):
     def get_gl_batches(self, **kwargs) -> List[Dict]:
         """Get GL transactions. Required: PeriodStart, PeriodEnd."""
         return self._client._post("getglbatches", kwargs)
+
+    def get_gl_batch(self, id: str) -> Dict:
+        """Get GL transaction details."""
+        return self._client._post("getglbatch", {"Id": id})
+
+    def get_gl_batch_full_details(self, id: str) -> Dict:
+        """Get GL transaction full details."""
+        return self._client._post("getglbatchfulldetails", {"Id": id})
 
     def get_banks(self) -> List[Dict]:
         """Get list of banks."""
@@ -435,11 +481,23 @@ class Inventory(Namespace):
         """Get inventory movements."""
         return self._client._post("getinventorymovements", kwargs)
 
+    def get_locations(self, **kwargs) -> List[Dict]:
+        """Get inventory locations list."""
+        return self._client._post("getlocations", kwargs)
+
 
 class Assets(Namespace):
     def get_fixed_assets(self, **kwargs) -> List[Dict]:
         """Get fixed assets."""
         return self._client._post("getfixedassets", kwargs, version="v2")
+
+    def get_locations(self, **kwargs) -> List[Dict]:
+        """Get fixed asset locations list."""
+        return self._client._post("getfixedassetlocations", kwargs, version="v2")
+
+    def get_responsible_employees(self, **kwargs) -> List[Dict]:
+        """Get fixed asset responsible employees list."""
+        return self._client._post("getfixedassetresponsibleemployees", kwargs, version="v2")
 
 
 class Taxes(Namespace):
@@ -460,6 +518,62 @@ class Dimensions(Namespace):
     def add(self, dimensions: List[Dict[str, Any]]) -> List[Dict]:
         """Add dimensions."""
         return self._client._post("adddimensions", dimensions, version="v2")
+
+
+class MasterData(Namespace):
+    def get_customer_groups(self, **kwargs) -> List[Dict]:
+        """Get customer groups list."""
+        return self._client._post("getcustomergroups", kwargs)
+
+    def get_vendor_groups(self, **kwargs) -> List[Dict]:
+        """Get vendor groups list."""
+        return self._client._post("getvendorgroups", kwargs)
+
+    def get_accounts(self, **kwargs) -> List[Dict]:
+        """Get accounts list."""
+        return self._client._post("getaccounts", kwargs)
+
+    def get_departments(self, **kwargs) -> List[Dict]:
+        """Get departments list."""
+        return self._client._post("getdepartments", kwargs)
+
+    def get_financial_years(self, **kwargs) -> List[Dict]:
+        """Get financial years list."""
+        return self._client._post("getfinancialyears", kwargs)
+
+    def get_units_of_measure(self, **kwargs) -> List[Dict]:
+        """Get units of measure list."""
+        return self._client._post("getunitsofmeasure", kwargs)
+
+
+class Reports(Namespace):
+    def get_customer_debts(self, **kwargs) -> Dict:
+        """Get customer debts report."""
+        return self._client._post("getcustomerdebtsreport", kwargs)
+
+    def get_customer_payments(self, **kwargs) -> Dict:
+        """Get customer payments report."""
+        return self._client._post("getcustomerpaymentreport", kwargs)
+
+    def get_profit_or_loss(self, **kwargs) -> Dict:
+        """Get statement of profit or loss report."""
+        return self._client._post("getprofitandlossreport", kwargs)
+
+    def get_financial_position(self, **kwargs) -> Dict:
+        """Get statement of financial position report."""
+        return self._client._post("getfinancialpositionreport", kwargs)
+
+    def get_inventory_report(self, **kwargs) -> Dict:
+        """Get inventory report."""
+        return self._client._post("getinventoryreport", kwargs)
+
+    def get_sales_report(self, **kwargs) -> Dict:
+        """Get sales report."""
+        return self._client._post("getsalesreport", kwargs)
+
+    def get_purchase_report(self, **kwargs) -> Dict:
+        """Get purchase report."""
+        return self._client._post("getpurchasereport", kwargs)
 
 
 # Example Usage
