@@ -39,7 +39,7 @@ export MERIT_API_KEY=your-api-key
 export MERIT_API_COUNTRY=EE
 ```
 
-Kui `MERIT_API_ID` või `MERIT_API_KEY` puudub, käivitub server seadistusrežiimis. Seadistusrežiimis:
+Kui `MERIT_API_ID` või `MERIT_API_KEY` puudub, käivitub server seadistusrežiimis (aga mitte igas kliendis). Seadistusrežiimis:
 
 - `get_setup_instructions` jääb kättesaadavaks
 - avastusressursid jäävad kättesaadavaks
@@ -71,7 +71,11 @@ claude mcp add merit-api -- npx -y merit-api-mcp
   "mcpServers": {
     "merit-api": {
       "command": "npx",
-      "args": ["-y", "merit-api-mcp"]
+      "args": ["-y", "merit-api-mcp"],
+      "env": {
+        "MERIT_API_ID": "your-api-id-here",
+        "MERIT_API_KEY": "your-api-key-here"
+      }
     }
   }
 }
