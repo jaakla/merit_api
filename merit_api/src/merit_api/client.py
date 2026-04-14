@@ -1,6 +1,6 @@
-import hmac
-import hashlib
 import base64
+import hashlib
+import hmac
 import json
 import time
 from datetime import datetime, timezone
@@ -10,16 +10,16 @@ import requests
 
 from .exceptions import MeritAPIError
 from .namespaces import (
+    Assets,
     Customers,
-    Vendors,
-    Items,
-    Sales,
-    Purchases,
+    Dimensions,
     Financial,
     Inventory,
-    Assets,
+    Items,
+    Purchases,
+    Sales,
     Taxes,
-    Dimensions,
+    Vendors,
 )
 
 
@@ -53,7 +53,7 @@ class MeritAPI:
     ):
         self.api_id = api_id
         self.api_key = api_key
-        self.base_url = self.BASE_URLS.get(country.upper(), self.BASE_URLS['EE'])
+        self.base_url = self.BASE_URLS.get(country.upper(), self.BASE_URLS["EE"])
         self.session = session or requests.Session()
         self.timeout = timeout
         self.max_retries = max_retries
@@ -62,7 +62,6 @@ class MeritAPI:
         self.request_logger = request_logger
         self.response_logger = response_logger
 
-        # Namespaces
         self.customers = Customers(self)
         self.vendors = Vendors(self)
         self.items = Items(self)
@@ -81,19 +80,13 @@ class MeritAPI:
     def _authenticate(self, serialized_body: str) -> Dict[str, str]:
         """Generate authentication parameters for a request."""
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-
-        # Message = apiId + timestamp + body
         data_to_sign = f"{self.api_id}{timestamp}{serialized_body}"
-
-        # Compute HMAC-SHA256
         signature_bin = hmac.new(
             self.api_key.encode("utf-8"),
             data_to_sign.encode("utf-8"),
             hashlib.sha256,
         ).digest()
-
         signature_b64 = base64.b64encode(signature_bin).decode("utf-8")
-
         return {
             "apiId": self.api_id,
             "timestamp": timestamp,

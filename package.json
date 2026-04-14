@@ -2,15 +2,36 @@
   "name": "merit-api-mcp",
   "version": "0.1.0",
   "description": "MCP server for the Merit Aktiva REST API",
+  "homepage": "https://github.com/jaakla/merit_api#readme",
+  "bugs": {
+    "url": "https://github.com/jaakla/merit_api/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaakla/merit_api.git"
+  },
   "bin": {
     "merit-api-mcp": "bin/merit-api-mcp.js"
   },
   "files": [
-    "bin/",
-    "src/",
-    "pyproject.toml",
+    "bin/merit-api-mcp.js",
     "README.md",
-    "requirements.txt"
+    "merit_api/README.md",
+    "merit_api/pyproject.toml",
+    "merit_api/requirements.txt",
+    "merit_api/src/merit_api/__init__.py",
+    "merit_api/src/merit_api/client.py",
+    "merit_api/src/merit_api/exceptions.py",
+    "merit_api/src/merit_api/namespaces.py",
+    "mcp/README.md",
+    "mcp/pyproject.toml",
+    "mcp/src/merit_api_mcp/__init__.py",
+    "mcp/src/merit_api_mcp/__main__.py",
+    "mcp/src/merit_api_mcp/config.py",
+    "mcp/src/merit_api_mcp/prompts.py",
+    "mcp/src/merit_api_mcp/registry.py",
+    "mcp/src/merit_api_mcp/resources.py",
+    "mcp/src/merit_api_mcp/server.py"
   ],
   "keywords": [
     "mcp",
@@ -22,9 +43,13 @@
   ],
   "license": "MIT",
   "scripts": {
-    "check": "node --check bin/merit-api-mcp.js"
+    "check": "node --check bin/merit-api-mcp.js",
+    "pack:dry-run": "npm pack --dry-run"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -1,13 +1,16 @@
-from merit_api import MeritAPI
 import os
-import json
+
 import pytest
+
+from merit_api import MeritAPI
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
+
 
 API_ID = os.getenv("MERIT_API_ID")
 API_KEY = os.getenv("MERIT_API_KEY")
@@ -19,9 +22,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_fetch_taxes_smoke():
+def test_fetch_data_smoke():
     client = MeritAPI(API_ID, API_KEY)
-    taxes = client.taxes.get_list()
-    assert isinstance(taxes, list)
-    if taxes:
-        json.dumps(taxes[0], indent=2)
+    assert client.customers.get_list() is not None
+    assert client.items.get_list() is not None

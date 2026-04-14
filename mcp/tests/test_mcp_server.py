@@ -3,9 +3,9 @@ import json
 from unittest.mock import Mock
 
 from merit_api import MeritAPI
-from merit_api.mcp.config import MeritMCPConfig
-from merit_api.mcp.registry import get_tool_specs
-from merit_api.mcp.server import build_mcp_server
+from merit_api_mcp.config import MeritMCPConfig
+from merit_api_mcp.registry import get_tool_specs
+from merit_api_mcp.server import build_mcp_server
 
 
 def _mock_response(status_code=200, payload=None, text=""):

@@ -4,7 +4,8 @@ from typing import Any, Callable, Mapping, Optional
 from fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from ..client import MeritAPI
+from merit_api import MeritAPI
+
 from .config import MeritMCPConfig, build_setup_payload, load_config_from_env
 from .prompts import register_prompts
 from .registry import build_tool_handler, get_tool_specs
@@ -16,7 +17,7 @@ ClientFactory = Callable[[MeritMCPConfig], Any]
 
 def _package_version() -> str:
     try:
-        return version("merit-api")
+        return version("merit-api-mcp-server")
     except PackageNotFoundError:
         return "0.1.0"
 

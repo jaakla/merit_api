@@ -13,12 +13,8 @@ authors = [
     {name = "Jaak", email = "jaak@example.com"},
 ]
 dependencies = [
-    "fastmcp>=3.2.4",
     "requests>=2.31.0",
 ]
-
-[project.scripts]
-merit-api-mcp = "merit_api.mcp.server:main"
 
 [project.optional-dependencies]
 dev = [

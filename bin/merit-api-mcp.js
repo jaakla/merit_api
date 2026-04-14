@@ -6,6 +6,8 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const PACKAGE_ROOT = path.resolve(__dirname, "..");
+const SDK_PROJECT_ROOT = path.join(PACKAGE_ROOT, "merit_api");
+const MCP_PROJECT_ROOT = path.join(PACKAGE_ROOT, "mcp");
 const PACKAGE_JSON = JSON.parse(
   fs.readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8"),
 );
@@ -113,7 +115,15 @@ function ensureInstalled(pythonInVenv, venvDir) {
     "install",
     "--disable-pip-version-check",
     "--upgrade",
-    PACKAGE_ROOT,
+    SDK_PROJECT_ROOT,
+  ]);
+  runChecked(pythonInVenv, [
+    "-m",
+    "pip",
+    "install",
+    "--disable-pip-version-check",
+    "--upgrade",
+    MCP_PROJECT_ROOT,
   ]);
   fs.writeFileSync(markerPath, `${VERSION}\n`);
 }
@@ -126,7 +136,7 @@ function main() {
 
   const result = spawnSync(
     pythonInVenv,
-    ["-m", "merit_api.mcp", ...process.argv.slice(2)],
+    ["-m", "merit_api_mcp", ...process.argv.slice(2)],
     { stdio: "inherit", env: process.env },
   );
   if (result.error) {
