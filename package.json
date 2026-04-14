@@ -1,5 +1,30 @@
 {
-  "dependencies": {
-    "freestyle-sandboxes": "^0.1.42"
+  "name": "merit-api-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for the Merit Aktiva REST API",
+  "bin": {
+    "merit-api-mcp": "bin/merit-api-mcp.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "pyproject.toml",
+    "README.md",
+    "requirements.txt"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "merit",
+    "merit-aktiva",
+    "accounting",
+    "invoicing"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "check": "node --check bin/merit-api-mcp.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
