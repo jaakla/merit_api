@@ -7,14 +7,18 @@ name = "merit-api"
 version = "0.1.0"
 description = "Python client for Merit Aktiva API"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Jaak", email = "jaak@example.com"},
 ]
 dependencies = [
+    "fastmcp>=3.2.4",
     "requests>=2.31.0",
 ]
+
+[project.scripts]
+merit-api-mcp = "merit_api.mcp.server:main"
 
 [project.optional-dependencies]
 dev = [
