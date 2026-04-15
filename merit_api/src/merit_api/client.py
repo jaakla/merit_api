@@ -237,11 +237,20 @@ class MeritAPI:
                 )
 
             if payload is None:
+                # Handle plain text responses (e.g., "OK" from email/einvoice endpoints)
+                text_response = response.text.strip()
+                if text_response:
+                    # Wrap plain text response in a dict for consistency
+                    return {"Message": text_response, "Success": True}
                 raise MeritAPIError(
                     f"Invalid JSON response from {url}: {response.text}",
                     status_code=response.status_code,
                     response_body=response.text,
                 )
+
+            # Handle JSON-encoded string responses (e.g., API returns "OK" as JSON string)
+            if isinstance(payload, str):
+                return {"Message": payload, "Success": True}
 
             self._raise_for_business_error(payload)
             return payload
@@ -293,6 +302,9 @@ class MeritAPI:
                 # Check if it's an error response
                 self._raise_for_business_error(payload)
                 # If payload contains PDF data as base64, extract it
+                if isinstance(payload, dict) and "FileContent" in payload:
+                    import base64
+                    return base64.b64decode(payload["FileContent"])
                 if isinstance(payload, dict) and "Content" in payload:
                     import base64
                     return base64.b64decode(payload["Content"])

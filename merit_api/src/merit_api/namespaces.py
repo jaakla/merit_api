@@ -44,7 +44,7 @@ class Items(Namespace):
 
     def add(self, items: List[Dict[str, Any]]) -> List[Dict]:
         """Add new items."""
-        return self._client._post("additems", items)
+        return self._client._post("senditems", items, version="v2")
 
     def update(self, item: Dict[str, Any]) -> Dict:
         """Update an item."""
@@ -69,8 +69,8 @@ class Sales(Namespace):
         return self._client._post("deleteinvoice", {"Id": id})
 
     def send_credit_invoice(self, credit_data: Dict[str, Any]) -> Dict:
-        """Create a credit invoice."""
-        return self._client._post("sendcreditinvoice", credit_data)
+        """Create a credit invoice (uses sendinvoice with negative amounts)."""
+        return self._client._post("sendinvoice", credit_data)
 
     def send_invoice_by_email(self, id: str, delivnote: bool = False) -> Dict:
         """Send a sales invoice by email to the customer.
@@ -88,18 +88,19 @@ class Sales(Namespace):
             version="v2"
         )
 
-    def send_invoice_by_einvoice(self, id: str) -> Dict:
+    def send_invoice_by_einvoice(self, id: str, delivnote: bool = False) -> Dict:
         """Send a sales invoice as a structured e-invoice.
-        
+
         Args:
             id: Sales invoice GUID (SIHId)
-        
+            delivnote: If True, send invoice without prices (delivery note mode)
+
         Returns:
-            Status message or error
+            "OK" on success, or "api-noeinv" if recipient lacks e-invoice capability
         """
         return self._client._post(
-            "sendinvoicebyeinvoice",
-            {"Id": id},
+            "sendinvoiceaseinv",
+            {"Id": id, "DelivNote": delivnote},
             version="v2"
         )
 
@@ -119,7 +120,7 @@ class Sales(Namespace):
                 f.write(pdf_bytes)
             ```
         """
-        pdf_bytes = self._client._get_pdf("getinvoicepdf", {"Id": id}, version="v2")
+        pdf_bytes = self._client._get_pdf("getsalesinvpdf", {"Id": id}, version="v2")
         return {"pdf": base64.b64encode(pdf_bytes).decode("utf-8")}
 
     def get_offers(self, **kwargs) -> List[Dict]:
@@ -138,7 +139,7 @@ class Purchases(Namespace):
 
     def send_invoice(self, invoice: Dict[str, Any]) -> Dict:
         """Create a purchase invoice."""
-        return self._client._post("sendpurchaseinvoice", invoice)
+        return self._client._post("sendpurchinvoice", invoice)
 
 
 class Financial(Namespace):
@@ -148,7 +149,7 @@ class Financial(Namespace):
 
     def create_payment(self, payment: Dict[str, Any]) -> Dict:
         """Create a payment."""
-        return self._client._post("createpayment", payment)
+        return self._client._post("sendpayment", payment)
 
     def get_gl_batches(self, **kwargs) -> List[Dict]:
         """Get GL transactions. PeriodStart/PeriodEnd (YYYYmmdd) default to last 3 months if omitted."""
@@ -192,8 +193,8 @@ class Taxes(Namespace):
 class Dimensions(Namespace):
     def get_list(self, all_values: bool = False) -> List[Dict]:
         """Get dimensions list. all_values=True includes expired dimension values."""
-        return self._client._post("dimensionslist", {"AllValues": all_values}, version="v2")
+        return self._client._post("getdimensions", {"AllValues": all_values}, version="v2")
 
     def add(self, dimensions: List[Dict[str, Any]]) -> List[Dict]:
         """Add dimensions."""
-        return self._client._post("adddimensions", dimensions, version="v2")
+        return self._client._post("senddimensions", dimensions, version="v2")
