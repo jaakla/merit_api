@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "merit-api-mcp-server"
+name = "merit-unofficial-mcp-server"
 version = "0.1.0"
 description = "FastMCP server for the Merit Aktiva API"
 readme = "README.md"
@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-merit-api-mcp-python = "merit_api_mcp.server:main"
+merit-unofficial-mcp-python = "merit_api_mcp.server:main"
 
 [project.optional-dependencies]
 dev = [

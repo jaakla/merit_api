@@ -17,7 +17,7 @@ ClientFactory = Callable[[MeritMCPConfig], Any]
 
 def _package_version() -> str:
     try:
-        return version("merit-api-mcp-server")
+        return version("merit-unofficial-mcp-server")
     except PackageNotFoundError:
         return "0.1.0"
 
