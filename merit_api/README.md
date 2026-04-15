@@ -29,3 +29,19 @@ invoices = client.sales.get_invoices(
 - request and response logging hooks with secret redaction
 - optional idempotency header generation
 - API-level business error parsing from HTTP 200 responses
+
+## Testing and method coverage report
+
+Run tests:
+
+```bash
+pytest -q
+```
+
+Regenerate the method-level read/write coverage report:
+
+```bash
+python scripts_report_method_test_coverage.py
+```
+
+The report is written to `reports/method_test_coverage.md` and CI checks that this file stays up to date.
