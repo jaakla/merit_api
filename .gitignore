@@ -36,3 +36,4 @@ node_modules/
 package-lock.json
 __pycache__/
 apitest.ipynb
+.claude/
