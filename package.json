@@ -1,5 +1,5 @@
 {
-  "name": "merit-api-mcp",
+  "name": "merit-unofficial-mcp",
   "version": "0.1.0",
   "description": "MCP server for the Merit Aktiva REST API",
   "homepage": "https://github.com/jaakla/merit_api#readme",
@@ -11,10 +11,10 @@
     "url": "git+https://github.com/jaakla/merit_api.git"
   },
   "bin": {
-    "merit-api-mcp": "bin/merit-api-mcp.js"
+    "merit-unofficial-mcp": "bin/merit-unofficial-mcp.js"
   },
   "files": [
-    "bin/merit-api-mcp.js",
+    "bin/merit-unofficial-mcp.js",
     "README.md",
     "merit_api/README.md",
     "merit_api/pyproject.toml",
@@ -43,7 +43,7 @@
   ],
   "license": "MIT",
   "scripts": {
-    "check": "node --check bin/merit-api-mcp.js",
+    "check": "node --check bin/merit-unofficial-mcp.js",
     "pack:dry-run": "npm pack --dry-run"
   },
   "engines": {

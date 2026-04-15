@@ -1,4 +1,4 @@
-# Merit API MCP Server
+# Merit Unofficial MCP Server
 
 MCP server ja Pythoni SDK Merit Aktiva REST API jaoks. MCP server eksponeerib praegu 29 tööriista, 3 töövoo prompti ja 2 ressurssi. See on mõeldud töötama MCP klientidega nagu Claude Code, Codex CLI, Cursor, Windsurf, Cline, Gemini CLI ja sarnased tööriistad.
 
@@ -53,7 +53,7 @@ Kui `MERIT_API_ID` või `MERIT_API_KEY` puudub, käivitub server seadistusrežii
 Enamik AI assistente oskab selle sinu eest seadistada. Mõeldud paketikäsk on:
 
 ```bash
-npx -y merit-api-mcp
+npx -y merit-unofficial-mcp
 ```
 
 Kui eelistad käsitsi seadistada:
@@ -61,7 +61,7 @@ Kui eelistad käsitsi seadistada:
 **Claude Code:**
 
 ```bash
-claude mcp add merit-api -- npx -y merit-api-mcp
+claude mcp add merit-api -- npx -y merit-unofficial-mcp
 ```
 
 **Teised tööriistad** JSON-konfiguratsiooniga:
@@ -71,7 +71,7 @@ claude mcp add merit-api -- npx -y merit-api-mcp
   "mcpServers": {
     "merit-api": {
       "command": "npx",
-      "args": ["-y", "merit-api-mcp"],
+      "args": ["-y", "merit-unofficial-mcp"],
       "env": {
         "MERIT_API_ID": "your-api-id-here",
         "MERIT_API_KEY": "your-api-key-here"
@@ -86,7 +86,7 @@ claude mcp add merit-api -- npx -y merit-api-mcp
 ```toml
 [mcp_servers.merit-api]
 command = "npx"
-args = ["-y", "merit-api-mcp"]
+args = ["-y", "merit-unofficial-mcp"]
 ```
 
 npm wrapper loob automaatselt privaatse virtualenv-i, paigaldab sinna kaasasolevad Pythoni alamprojektid ja käivitab MCP serveri. Tavakasutuse korral ei pea kasutaja `pip install` käske käsitsi jooksutama.
@@ -270,12 +270,12 @@ Uuendamise viis sõltub sellest, kuidas serverit käivitad.
 
 ### Kui kasutad `npx`
 
-Kui sinu MCP konfiguratsioon kasutab `npx -y merit-api-mcp`, piisab tavaliselt MCP serveri taaskäivitamisest või uuesti laadimisest. Järgmisel käivitamisel tõmbab `npx` viimase avaldatud versiooni.
+Kui sinu MCP konfiguratsioon kasutab `npx -y merit-unofficial-mcp`, piisab tavaliselt MCP serveri taaskäivitamisest või uuesti laadimisest. Järgmisel käivitamisel tõmbab `npx` viimase avaldatud versiooni.
 
 Kui klient jääb kasutama vanemat cache'itud versiooni, sunni ühe korra värskendus:
 
 ```bash
-npx -y merit-api-mcp@latest
+npx -y merit-unofficial-mcp@latest
 ```
 
 Seejärel taaskäivita MCP server oma kliendis.

@@ -14,27 +14,33 @@ const PACKAGE_JSON = JSON.parse(
 const VERSION = PACKAGE_JSON.version;
 
 function fail(message) {
-  process.stderr.write(`merit-api-mcp: ${message}\n`);
+  process.stderr.write(`merit-unofficial-mcp: ${message}\n`);
   process.exit(1);
 }
 
 function defaultCacheDir() {
+  if (process.env.MERIT_UNOFFICIAL_MCP_VENV_DIR) {
+    return process.env.MERIT_UNOFFICIAL_MCP_VENV_DIR;
+  }
   if (process.env.MERIT_API_MCP_VENV_DIR) {
     return process.env.MERIT_API_MCP_VENV_DIR;
   }
   if (process.platform === "win32") {
     return path.join(
       process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"),
-      "merit-api-mcp",
+      "merit-unofficial-mcp",
       VERSION,
     );
   }
   const base = process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache");
-  return path.join(base, "merit-api-mcp", VERSION);
+  return path.join(base, "merit-unofficial-mcp", VERSION);
 }
 
 function pythonCandidates() {
   const candidates = [];
+  if (process.env.MERIT_UNOFFICIAL_MCP_PYTHON) {
+    candidates.push([process.env.MERIT_UNOFFICIAL_MCP_PYTHON]);
+  }
   if (process.env.MERIT_API_MCP_PYTHON) {
     candidates.push([process.env.MERIT_API_MCP_PYTHON]);
   }
@@ -84,7 +90,7 @@ function ensureVenv(pythonCommand, venvDir) {
   const pythonInVenv = venvPythonPath(venvDir);
   if (!fs.existsSync(pythonInVenv)) {
     fs.mkdirSync(venvDir, { recursive: true });
-    process.stderr.write("merit-api-mcp: creating private Python environment\n");
+    process.stderr.write("merit-unofficial-mcp: creating private Python environment\n");
     runChecked(pythonCommand[0], [...pythonCommand.slice(1), "-m", "venv", venvDir]);
   }
   return pythonInVenv;
@@ -100,7 +106,7 @@ function ensureInstalled(pythonInVenv, venvDir) {
     return;
   }
 
-  process.stderr.write("merit-api-mcp: installing bundled Python package\n");
+  process.stderr.write("merit-unofficial-mcp: installing bundled Python package\n");
   runChecked(pythonInVenv, [
     "-m",
     "pip",
