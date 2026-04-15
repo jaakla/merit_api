@@ -39,19 +39,19 @@ READ_METHOD_CASES = [
     (
         "sales.get_offers",
         lambda client: client.sales.get_offers(PeriodStart="2026-01-01", PeriodEnd="2026-01-31"),
-        ("getsalesoffers", {"PeriodStart": "2026-01-01", "PeriodEnd": "2026-01-31"}),
-        {},
+        ("getoffers", {"PeriodStart": "2026-01-01", "PeriodEnd": "2026-01-31"}),
+        {"version": "v2"},
     ),
     (
         "sales.get_recurring_invoices",
-        lambda client: client.sales.get_recurring_invoices(Status=1),
-        ("getrecurringinvoices", {"Status": 1}),
-        {},
+        lambda client: client.sales.get_recurring_invoices(PeriodStart="2026-01-01", PeriodEnd="2026-01-31", DateType=0),
+        ("getperinvoices", {"PeriodStart": "2026-01-01", "PeriodEnd": "2026-01-31", "DateType": 0}),
+        {"version": "v2"},
     ),
     (
         "purchases.get_invoices",
         lambda client: client.purchases.get_invoices(PeriodStart="2026-01-01", PeriodEnd="2026-01-31"),
-        ("getpurchaseinvoices", {"PeriodStart": "2026-01-01", "PeriodEnd": "2026-01-31"}),
+        ("getpurchorders", {"PeriodStart": "2026-01-01", "PeriodEnd": "2026-01-31"}),
         {},
     ),
     (
@@ -75,7 +75,7 @@ READ_METHOD_CASES = [
     (
         "financial.get_costs",
         lambda client: client.financial.get_costs(),
-        ("getcosts",),
+        ("getcostcenters",),
         {},
     ),
     (
@@ -87,13 +87,13 @@ READ_METHOD_CASES = [
     (
         "inventory.get_movements",
         lambda client: client.inventory.get_movements(PeriodStart="2026-01-01", PeriodEnd="2026-01-31"),
-        ("getinventorymovements", {"PeriodStart": "2026-01-01", "PeriodEnd": "2026-01-31"}),
-        {},
+        ("getinvmovements", {"PeriodStart": "2026-01-01", "PeriodEnd": "2026-01-31"}),
+        {"version": "v2"},
     ),
     (
         "assets.get_fixed_assets",
         lambda client: client.assets.get_fixed_assets(PeriodStart="2026-01-01", PeriodEnd="2026-01-31"),
-        ("getfixedassets", {"PeriodStart": "2026-01-01", "PeriodEnd": "2026-01-31"}),
+        ("getfixassets", {"PeriodStart": "2026-01-01", "PeriodEnd": "2026-01-31"}),
         {"version": "v2"},
     ),
     (
@@ -105,7 +105,7 @@ READ_METHOD_CASES = [
     (
         "dimensions.get_list",
         lambda client: client.dimensions.get_list(),
-        ("dimensionslist",),
+        ("dimensionslist", {"AllValues": False}),
         {"version": "v2"},
     ),
 ]
