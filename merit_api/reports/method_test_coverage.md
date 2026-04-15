@@ -11,23 +11,23 @@ Coverage: **17/17 (100.0%)**
 
 | Method | Endpoint | Version | Covered by tests | Evidence |
 |---|---|---|---|---|
-| `Assets.get_fixed_assets` | `getfixedassets` | `v2` | ✅ | test_read_methods.py |
-| `Customers.get_list` | `getcustomers` | `v1` | ✅ | test_fetch_data.py, test_merit_api.py, test_phase0_foundation.py, test_read_methods.py, test_send_invoice.py |
-| `Dimensions.get_list` | `dimensionslist` | `v2` | ✅ | test_read_methods.py |
-| `Financial.get_banks` | `getbanks` | `v1` | ✅ | test_merit_api.py, test_read_methods.py |
-| `Financial.get_costs` | `getcosts` | `v1` | ✅ | test_read_methods.py |
-| `Financial.get_gl_batches` | `getglbatches` | `v1` | ✅ | test_read_methods.py |
-| `Financial.get_payments` | `getpayments` | `v1` | ✅ | test_read_methods.py |
-| `Financial.get_projects` | `getprojects` | `v1` | ✅ | test_merit_api.py, test_read_methods.py |
-| `Inventory.get_movements` | `getinventorymovements` | `v1` | ✅ | test_read_methods.py |
-| `Items.get_list` | `getitems` | `v1` | ✅ | test_fetch_data.py, test_merit_api.py, test_read_methods.py, test_send_invoice.py |
-| `Purchases.get_invoices` | `getpurchaseinvoices` | `v1` | ✅ | test_read_methods.py |
-| `Sales.get_invoice` | `getinvoice` | `v1` | ✅ | test_read_methods.py |
-| `Sales.get_invoices` | `getinvoices` | `v2` | ✅ | test_read_methods.py |
-| `Sales.get_offers` | `getsalesoffers` | `v1` | ✅ | test_read_methods.py |
-| `Sales.get_recurring_invoices` | `getrecurringinvoices` | `v1` | ✅ | test_read_methods.py |
-| `Taxes.get_list` | `gettaxes` | `v1` | ✅ | test_read_methods.py, test_taxes.py |
-| `Vendors.get_list` | `getvendors` | `v1` | ✅ | test_read_methods.py |
+| `Assets.get_fixed_assets` | `getfixassets` | `v2` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Customers.get_list` | `getcustomers` | `v1` | ✅ | test_integration_read.py, test_phase0_foundation.py, test_read_methods.py, test_send_invoice.py |
+| `Dimensions.get_list` | `dimensionslist` | `v2` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Financial.get_banks` | `getbanks` | `v1` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Financial.get_costs` | `getcostcenters` | `v1` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Financial.get_gl_batches` | `getglbatches` | `v1` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Financial.get_payments` | `getpayments` | `v1` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Financial.get_projects` | `getprojects` | `v1` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Inventory.get_movements` | `getinvmovements` | `v2` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Items.get_list` | `getitems` | `v1` | ✅ | test_integration_read.py, test_read_methods.py, test_send_invoice.py |
+| `Purchases.get_invoices` | `getpurchorders` | `v1` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Sales.get_invoice` | `getinvoice` | `v1` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Sales.get_invoices` | `getinvoices` | `v2` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Sales.get_offers` | `getoffers` | `v2` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Sales.get_recurring_invoices` | `getperinvoices` | `v2` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Taxes.get_list` | `gettaxes` | `v1` | ✅ | test_integration_read.py, test_read_methods.py |
+| `Vendors.get_list` | `getvendors` | `v1` | ✅ | test_integration_read.py, test_read_methods.py |
 
 ## Write capabilities
 

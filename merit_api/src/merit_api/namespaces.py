@@ -72,12 +72,12 @@ class Sales(Namespace):
         return self._client._post("sendcreditinvoice", credit_data)
 
     def get_offers(self, **kwargs) -> List[Dict]:
-        """Get list of sales offers."""
-        return self._client._post("getsalesoffers", kwargs)
+        """Get list of sales offers. Required: PeriodStart, PeriodEnd, DateType, UnPaid."""
+        return self._client._post("getoffers", kwargs, version="v2")
 
     def get_recurring_invoices(self, **kwargs) -> List[Dict]:
-        """Get recurring invoices."""
-        return self._client._post("getrecurringinvoices", kwargs)
+        """Get recurring invoices. Required: PeriodStart, PeriodEnd, DateType."""
+        return self._client._post("getperinvoices", kwargs, version="v2")
 
 
 class Purchases(Namespace):
@@ -109,7 +109,7 @@ class Financial(Namespace):
 
     def get_costs(self) -> List[Dict]:
         """Get cost centers."""
-        return self._client._post("getcosts")
+        return self._client._post("getcostcenters")
 
     def get_projects(self) -> List[Dict]:
         """Get projects."""
@@ -119,13 +119,13 @@ class Financial(Namespace):
 class Inventory(Namespace):
     def get_movements(self, **kwargs) -> List[Dict]:
         """Get inventory movements."""
-        return self._client._post("getinventorymovements", kwargs)
+        return self._client._post("getinvmovements", kwargs, version="v2")
 
 
 class Assets(Namespace):
     def get_fixed_assets(self, **kwargs) -> List[Dict]:
         """Get fixed assets."""
-        return self._client._post("getfixedassets", kwargs, version="v2")
+        return self._client._post("getfixassets", kwargs, version="v2")
 
 
 class Taxes(Namespace):
@@ -139,9 +139,9 @@ class Taxes(Namespace):
 
 
 class Dimensions(Namespace):
-    def get_list(self) -> List[Dict]:
-        """Get dimensions list."""
-        return self._client._post("dimensionslist", version="v2")
+    def get_list(self, all_values: bool = False) -> List[Dict]:
+        """Get dimensions list. all_values=True includes expired dimension values."""
+        return self._client._post("dimensionslist", {"AllValues": all_values}, version="v2")
 
     def add(self, dimensions: List[Dict[str, Any]]) -> List[Dict]:
         """Add dimensions."""
