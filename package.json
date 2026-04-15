@@ -1,6 +1,6 @@
 {
   "name": "merit-unofficial-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server for the Merit Aktiva REST API",
   "homepage": "https://github.com/jaakla/merit_api#readme",
   "bugs": {

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
+import base64
 
 
 class Namespace:
@@ -70,6 +71,56 @@ class Sales(Namespace):
     def send_credit_invoice(self, credit_data: Dict[str, Any]) -> Dict:
         """Create a credit invoice."""
         return self._client._post("sendcreditinvoice", credit_data)
+
+    def send_invoice_by_email(self, id: str, delivnote: bool = False) -> Dict:
+        """Send a sales invoice by email to the customer.
+        
+        Args:
+            id: Sales invoice GUID (SIHId)
+            delivnote: If True, send invoice without prices (delivery note mode)
+        
+        Returns:
+            Status message or error from mail server
+        """
+        return self._client._post(
+            "sendinvoicebyemail",
+            {"Id": id, "DelivNote": delivnote},
+            version="v2"
+        )
+
+    def send_invoice_by_einvoice(self, id: str) -> Dict:
+        """Send a sales invoice as a structured e-invoice.
+        
+        Args:
+            id: Sales invoice GUID (SIHId)
+        
+        Returns:
+            Status message or error
+        """
+        return self._client._post(
+            "sendinvoicebyeinvoice",
+            {"Id": id},
+            version="v2"
+        )
+
+    def get_invoice_pdf(self, id: str) -> Dict[str, Any]:
+        """Get a sales invoice as a PDF document (returned as base64-encoded data).
+        
+        Args:
+            id: Sales invoice GUID (SIHId)
+        
+        Returns:
+            Dict with 'pdf' containing base64-encoded PDF content that can be decoded:
+            
+            ```python
+            result = client.sales.get_invoice_pdf(invoice_id)
+            pdf_bytes = base64.b64decode(result['pdf'])
+            with open('invoice.pdf', 'wb') as f:
+                f.write(pdf_bytes)
+            ```
+        """
+        pdf_bytes = self._client._get_pdf("getinvoicepdf", {"Id": id}, version="v2")
+        return {"pdf": base64.b64encode(pdf_bytes).decode("utf-8")}
 
     def get_offers(self, **kwargs) -> List[Dict]:
         """Get list of sales offers. Required: PeriodStart, PeriodEnd, DateType, UnPaid."""

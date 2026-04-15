@@ -3,7 +3,7 @@ from inspect import Parameter, Signature
 from typing import Any, Callable, Literal, Sequence
 
 
-ParamMode = Literal["filters", "payload", "items", "id", "id_with_attachment", "none"]
+ParamMode = Literal["filters", "payload", "items", "id", "id_with_attachment", "id_with_delivnote", "none"]
 
 
 @dataclass(frozen=True)
@@ -42,6 +42,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("sales_send_invoice", "sales", "send_invoice", "Create a sales invoice.", "payload", True),
     ToolSpec("sales_delete_invoice", "sales", "delete_invoice", "Delete a sales invoice by id.", "id", True),
     ToolSpec("sales_send_credit_invoice", "sales", "send_credit_invoice", "Create a credit invoice.", "payload", True),
+    ToolSpec("sales_send_invoice_by_email", "sales", "send_invoice_by_email", "Send a sales invoice by email to the customer.", "id_with_delivnote", True),
+    ToolSpec("sales_send_invoice_by_einvoice", "sales", "send_invoice_by_einvoice", "Send a sales invoice as a structured e-invoice.", "id", True),
+    ToolSpec("sales_get_invoice_pdf", "sales", "get_invoice_pdf", "Get a sales invoice as a PDF document (returns base64-encoded content).", "id"),
     ToolSpec("sales_get_offers", "sales", "get_offers", "List sales offers.", "filters"),
     ToolSpec("sales_get_recurring_invoices", "sales", "get_recurring_invoices", "List recurring invoices.", "filters"),
     ToolSpec("purchases_get_invoices", "purchases", "get_invoices", "List purchase invoices. PeriodStart/PeriodEnd (YYYYmmdd, max 3 months range) default to last 3 months if omitted.", "filters"),
@@ -84,6 +87,11 @@ def _build_signature(spec: ToolSpec) -> Signature:
             Parameter("id", kind=Parameter.POSITIONAL_OR_KEYWORD, annotation=str),
             Parameter("add_attachment", kind=Parameter.POSITIONAL_OR_KEYWORD, default=False, annotation=bool),
         ]
+    elif spec.param_mode == "id_with_delivnote":
+        parameters = [
+            Parameter("id", kind=Parameter.POSITIONAL_OR_KEYWORD, annotation=str),
+            Parameter("delivnote", kind=Parameter.POSITIONAL_OR_KEYWORD, default=False, annotation=bool),
+        ]
     else:
         parameters = []
 
@@ -103,6 +111,9 @@ def _build_annotations(spec: ToolSpec) -> dict[str, Any]:
     elif spec.param_mode == "id_with_attachment":
         annotations["id"] = str
         annotations["add_attachment"] = bool
+    elif spec.param_mode == "id_with_delivnote":
+        annotations["id"] = str
+        annotations["delivnote"] = bool
     return annotations
 
 
@@ -130,6 +141,8 @@ def build_tool_handler(
             return method(kwargs["id"])
         if spec.param_mode == "id_with_attachment":
             return method(kwargs["id"], add_attachment=kwargs.get("add_attachment", False))
+        if spec.param_mode == "id_with_delivnote":
+            return method(kwargs["id"], delivnote=kwargs.get("delivnote", False))
         return method()
 
     handler.__name__ = spec.name

@@ -247,3 +247,81 @@ class MeritAPI:
             return payload
 
         raise MeritAPIError(f"Request failed after retries for {url}")
+
+    def _get_pdf(
+        self,
+        endpoint: str,
+        body: Optional[Any] = None,
+        version: str = "v1",
+        *,
+        idempotency_key: Optional[str] = None,
+    ) -> bytes:
+        """Make a POST request to retrieve a PDF file."""
+        body = body or {}
+        serialized_body = self._serialize_body(body)
+        auth_params = self._authenticate(serialized_body)
+        url = f"{self.base_url}{version}/{endpoint.lstrip('/')}"
+        headers = self._build_headers(serialized_body, endpoint, body, idempotency_key)
+
+        for attempt in range(self.max_retries + 1):
+            self._log_request(
+                url=url,
+                endpoint=endpoint,
+                version=version,
+                body=body,
+                headers=headers,
+                auth_params=auth_params,
+                attempt=attempt + 1,
+            )
+            try:
+                response = self.session.post(
+                    url,
+                    params=auth_params,
+                    data=serialized_body.encode("utf-8"),
+                    headers=headers,
+                    timeout=self.timeout,
+                )
+            except requests.exceptions.RequestException as exc:
+                if attempt < self.max_retries:
+                    time.sleep(self.retry_backoff * (attempt + 1))
+                    continue
+                raise MeritAPIError(f"Request failed: {exc}") from exc
+
+            # Try to parse as JSON first (in case API returns base64-encoded PDF or error)
+            try:
+                payload = response.json()
+                # Check if it's an error response
+                self._raise_for_business_error(payload)
+                # If payload contains PDF data as base64, extract it
+                if isinstance(payload, dict) and "Content" in payload:
+                    import base64
+                    return base64.b64decode(payload["Content"])
+                if isinstance(payload, dict) and "Pdf" in payload:
+                    import base64
+                    return base64.b64decode(payload["Pdf"])
+            except ValueError:
+                # Not JSON, so assume it's binary PDF
+                payload = None
+
+            self._log_response(url=url, endpoint=endpoint, response=response, payload=payload)
+
+            if response.status_code != 200:
+                if response.status_code in self.RETRYABLE_STATUS_CODES and attempt < self.max_retries:
+                    time.sleep(self.retry_backoff * (attempt + 1))
+                    continue
+                raise MeritAPIError(
+                    f"API Error ({response.status_code}) at {url}: {response.text}",
+                    status_code=response.status_code,
+                    response_body=payload if payload is not None else response.text,
+                )
+
+            # Return binary content (either from JSON or raw binary response)
+            if payload is not None:
+                # JSON response was already processed above; shouldn't reach here
+                raise MeritAPIError(
+                    f"Unexpected response format from {url}: {response.text}",
+                    status_code=response.status_code,
+                )
+            return response.content
+
+        raise MeritAPIError(f"Request failed after retries for {url}")
