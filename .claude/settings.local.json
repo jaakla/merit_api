@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.merit.ee)",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}

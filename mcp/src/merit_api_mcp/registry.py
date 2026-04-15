@@ -44,7 +44,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("sales_send_credit_invoice", "sales", "send_credit_invoice", "Create a credit invoice.", "payload", True),
     ToolSpec("sales_get_offers", "sales", "get_offers", "List sales offers.", "filters"),
     ToolSpec("sales_get_recurring_invoices", "sales", "get_recurring_invoices", "List recurring invoices.", "filters"),
-    ToolSpec("purchases_get_invoices", "purchases", "get_invoices", "List purchase invoices for a date range or filters.", "filters"),
+    ToolSpec("purchases_get_invoices", "purchases", "get_invoices", "List purchase invoices. PeriodStart/PeriodEnd (YYYYmmdd, max 3 months range) default to last 3 months if omitted.", "filters"),
     ToolSpec("purchases_send_invoice", "purchases", "send_invoice", "Create a purchase invoice.", "payload", True),
     ToolSpec("financial_get_payments", "financial", "get_payments", "List payments for a date range or filters.", "filters"),
     ToolSpec("financial_create_payment", "financial", "create_payment", "Create a payment.", "payload", True),

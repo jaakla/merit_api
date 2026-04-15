@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 
@@ -6,6 +7,13 @@ class Namespace:
 
     def __init__(self, client):
         self._client = client
+
+    def _apply_default_period(self, kwargs: dict) -> dict:
+        if "PeriodStart" not in kwargs or "PeriodEnd" not in kwargs:
+            today = datetime.now()
+            kwargs.setdefault("PeriodEnd", today.strftime("%Y%m%d"))
+            kwargs.setdefault("PeriodStart", (today - timedelta(days=90)).strftime("%Y%m%d"))
+        return kwargs
 
 
 class Customers(Namespace):
@@ -44,8 +52,8 @@ class Items(Namespace):
 
 class Sales(Namespace):
     def get_invoices(self, **kwargs) -> List[Dict]:
-        """Get list of invoices. Required filters: PeriodStart, PeriodEnd."""
-        return self._client._post("getinvoices", kwargs, version="v2")
+        """Get list of invoices. PeriodStart/PeriodEnd (YYYYmmdd) default to last 3 months if omitted."""
+        return self._client._post("getinvoices", self._apply_default_period(kwargs), version="v2")
 
     def get_invoice(self, id: str, add_attachment: bool = False) -> Dict:
         """Get single invoice details."""
@@ -74,8 +82,8 @@ class Sales(Namespace):
 
 class Purchases(Namespace):
     def get_invoices(self, **kwargs) -> List[Dict]:
-        """Get list of purchase invoices. Required filters: PeriodStart, PeriodEnd."""
-        return self._client._post("getpurchaseinvoices", kwargs)
+        """Get list of purchase invoices. Required filters: PeriodStart, PeriodEnd (YYYYmmdd). Defaults to last 3 months."""
+        return self._client._post("getpurchorders", self._apply_default_period(kwargs))
 
     def send_invoice(self, invoice: Dict[str, Any]) -> Dict:
         """Create a purchase invoice."""
@@ -84,16 +92,16 @@ class Purchases(Namespace):
 
 class Financial(Namespace):
     def get_payments(self, **kwargs) -> List[Dict]:
-        """Get payments. Required: PeriodStart, PeriodEnd."""
-        return self._client._post("getpayments", kwargs)
+        """Get payments. PeriodStart/PeriodEnd (YYYYmmdd) default to last 3 months if omitted."""
+        return self._client._post("getpayments", self._apply_default_period(kwargs))
 
     def create_payment(self, payment: Dict[str, Any]) -> Dict:
         """Create a payment."""
         return self._client._post("createpayment", payment)
 
     def get_gl_batches(self, **kwargs) -> List[Dict]:
-        """Get GL transactions. Required: PeriodStart, PeriodEnd."""
-        return self._client._post("getglbatches", kwargs)
+        """Get GL transactions. PeriodStart/PeriodEnd (YYYYmmdd) default to last 3 months if omitted."""
+        return self._client._post("getglbatches", self._apply_default_period(kwargs))
 
     def get_banks(self) -> List[Dict]:
         """Get list of banks."""
