@@ -105,7 +105,7 @@ READ_METHOD_CASES = [
     (
         "dimensions.get_list",
         lambda client: client.dimensions.get_list(),
-        ("dimensionslist", {"AllValues": False}),
+        ("getdimensions", {"AllValues": False}),
         {"version": "v2"},
     ),
 ]
