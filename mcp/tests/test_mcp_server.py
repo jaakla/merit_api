@@ -19,7 +19,7 @@ def _mock_response(status_code=200, payload=None, text=""):
     return response
 
 
-def test_mcp_registry_exposes_all_current_tools_with_stable_names():
+def test_mcp_registry_exposes_consolidated_tool_names_with_stable_annotations():
     async def scenario():
         server = build_mcp_server(env={})
         tools = await server.list_tools()
@@ -27,7 +27,19 @@ def test_mcp_registry_exposes_all_current_tools_with_stable_names():
         actual_names = [tool.name for tool in tools]
 
         assert actual_names == expected_names
-        assert len(set(actual_names)) == len(actual_names)
+        assert actual_names == [
+            "get_setup_instructions",
+            "merit_read_master_data",
+            "merit_read_sales",
+            "merit_read_purchases",
+            "merit_read_financial",
+            "merit_read_inventory",
+            "merit_read_reports",
+            "merit_write_customers",
+            "merit_write_sales",
+            "merit_write_purchases",
+            "merit_write_financial",
+        ]
 
         by_name = {tool.name: tool for tool in tools}
         for spec in get_tool_specs():
@@ -38,19 +50,21 @@ def test_mcp_registry_exposes_all_current_tools_with_stable_names():
     asyncio.run(scenario())
 
 
-def test_setup_mode_returns_setup_guidance_for_api_tools():
+def test_setup_mode_returns_setup_guidance_for_all_consolidated_tools():
     async def scenario():
         server = build_mcp_server(env={})
-        result = await server.call_tool("customers_get_list", {"filters": {"Name": "Acme"}})
+        for spec in get_tool_specs():
+            first_action = spec.actions[0]
+            result = await server.call_tool(spec.name, {"action": first_action.name})
 
-        assert result.structured_content["mode"] == "setup"
-        assert result.structured_content["blocked_tool"] == "customers_get_list"
-        assert result.structured_content["blocked_api_method"] == "customers.get_list"
+            assert result.structured_content["mode"] == "setup"
+            assert result.structured_content["blocked_tool"] == spec.name
+            assert result.structured_content["blocked_api_method"] == first_action.api_method
 
     asyncio.run(scenario())
 
 
-def test_connected_mode_read_only_tool_calls_underlying_sdk_method():
+def test_connected_mode_read_master_data_routes_to_sdk_method():
     async def scenario():
         session = Mock()
         session.post.return_value = _mock_response(status_code=200, payload=[{"Id": "cust-1"}])
@@ -60,7 +74,10 @@ def test_connected_mode_read_only_tool_calls_underlying_sdk_method():
             client_factory=lambda _: client,
         )
 
-        result = await server.call_tool("customers_get_list", {"filters": {"Name": "Acme"}})
+        result = await server.call_tool(
+            "merit_read_master_data",
+            {"action": "customers_list", "filters": {"Name": "Acme"}},
+        )
 
         assert json.loads(result.content[0].text) == [{"Id": "cust-1"}]
         assert session.post.call_args.args[0].endswith("/v1/getcustomers")
@@ -68,7 +85,121 @@ def test_connected_mode_read_only_tool_calls_underlying_sdk_method():
     asyncio.run(scenario())
 
 
-def test_connected_mode_mutating_tool_returns_raw_sdk_payload():
+def test_connected_mode_read_sales_routes_invoice_get_with_add_attachment():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload={"Id": "inv-5"})
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_read_sales",
+            {"action": "invoice_get", "id": "inv-5", "add_attachment": True},
+        )
+
+        assert json.loads(result.content[0].text) == {"Id": "inv-5"}
+        payload = json.loads(session.post.call_args.kwargs["data"].decode("utf-8"))
+        assert payload == {"AddAttachment": True, "Id": "inv-5"}
+
+    asyncio.run(scenario())
+
+
+def test_connected_mode_read_purchases_routes_invoice_get():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload={"BillId": "bill-1"})
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_read_purchases",
+            {"action": "invoice_get", "id": "bill-1"},
+        )
+
+        assert json.loads(result.content[0].text) == {"BillId": "bill-1"}
+        payload = json.loads(session.post.call_args.kwargs["data"].decode("utf-8"))
+        assert payload == {"Id": "bill-1", "SkipAttachment": True}
+
+    asyncio.run(scenario())
+
+
+def test_connected_mode_read_financial_routes_bank_scoped_get_action():
+    async def scenario():
+        session = Mock()
+        session.get.return_value = _mock_response(status_code=200, payload=[{"Id": "expense-1"}])
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_read_financial",
+            {
+                "action": "expense_payments_list",
+                "bank_id": "bank-1",
+                "filters": {"docDateFrom": "2026-01-01", "docDateTo": "2026-01-31"},
+            },
+        )
+
+        assert json.loads(result.content[0].text) == [{"Id": "expense-1"}]
+        assert session.get.call_args.args[0].endswith("/v2/Banks/bank-1/ExpensePayments")
+        assert session.get.call_args.kwargs["params"]["docDateFrom"] == "2026-01-01"
+
+    asyncio.run(scenario())
+
+
+def test_connected_mode_read_inventory_routes_price_get():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload={"ItemCode": "A1", "Price": 12})
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_read_inventory",
+            {"action": "price_get", "filters": {"ItemCode": "A1", "CustomerId": "cust-1", "DocDate": "20260131"}},
+        )
+
+        assert json.loads(result.content[0].text) == {"ItemCode": "A1", "Price": 12}
+        payload = json.loads(session.post.call_args.kwargs["data"].decode("utf-8"))
+        assert payload["ItemCode"] == "A1"
+        assert payload["DocDate"] == "20260131"
+
+    asyncio.run(scenario())
+
+
+def test_connected_mode_read_reports_routes_profit_report():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload={"Data": []})
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_read_reports",
+            {"action": "profit_report_get", "filters": {"EndDate": "20260131", "PerCount": 3, "DepFilter": ""}},
+        )
+
+        assert json.loads(result.content[0].text) == {"Data": []}
+        assert session.post.call_args.args[0].endswith("/v1/getprofitrep")
+
+    asyncio.run(scenario())
+
+
+def test_connected_mode_write_sales_routes_invoice_create():
     async def scenario():
         session = Mock()
         session.post.return_value = _mock_response(status_code=200, payload={"Id": "inv-1", "Status": "Created"})
@@ -79,8 +210,8 @@ def test_connected_mode_mutating_tool_returns_raw_sdk_payload():
         )
 
         result = await server.call_tool(
-            "sales_send_invoice",
-            {"payload": {"InvoiceNo": "INV-1", "Customer": {"Id": "cust-1"}}},
+            "merit_write_sales",
+            {"action": "sales_invoice_create", "payload": {"InvoiceNo": "INV-1", "Customer": {"Id": "cust-1"}}},
         )
 
         assert result.structured_content == {"Id": "inv-1", "Status": "Created"}
@@ -89,26 +220,127 @@ def test_connected_mode_mutating_tool_returns_raw_sdk_payload():
     asyncio.run(scenario())
 
 
-def test_connected_mode_scalar_tool_uses_explicit_arguments():
+def test_connected_mode_write_customers_routes_customer_upsert():
     async def scenario():
         session = Mock()
-        session.post.return_value = _mock_response(status_code=200, payload={"Id": "inv-5"})
+        session.post.return_value = _mock_response(status_code=200, payload={"Id": "cust-1"})
         client = MeritAPI("api-id", "api-key", session=session)
         server = build_mcp_server(
             config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
             client_factory=lambda _: client,
         )
 
-        result = await server.call_tool("sales_get_invoice", {"id": "inv-5", "add_attachment": True})
+        result = await server.call_tool(
+            "merit_write_customers",
+            {"action": "customer_upsert", "payload": {"Name": "Acme OÜ"}},
+        )
 
-        assert result.structured_content == {"Id": "inv-5"}
-        payload = json.loads(session.post.call_args.kwargs["data"].decode("utf-8"))
-        assert payload == {"AddAttachment": True, "Id": "inv-5"}
+        assert result.structured_content == {"Id": "cust-1"}
+        assert session.post.call_args.args[0].endswith("/v1/sendcustomer")
 
     asyncio.run(scenario())
 
 
-def test_mcp_resources_and_prompts_are_available():
+def test_connected_mode_write_purchases_routes_purchase_invoice_create():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload={"BillId": "bill-1"})
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_write_purchases",
+            {"action": "purchase_invoice_create", "payload": {"Vendor": {"Id": "ven-1", "Name": "Vendor"}}},
+        )
+
+        assert result.structured_content == {"BillId": "bill-1"}
+        assert session.post.call_args.args[0].endswith("/v1/sendpurchinvoice")
+
+    asyncio.run(scenario())
+
+
+def test_connected_mode_write_financial_routes_item_update():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload={"Id": "item-1"})
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_write_financial",
+            {"action": "item_update", "payload": {"Id": "item-1", "Code": "A1"}},
+        )
+
+        assert result.structured_content == {"Id": "item-1"}
+        assert session.post.call_args.args[0].endswith("/v1/updateitem")
+
+    asyncio.run(scenario())
+
+
+def test_connected_mode_write_sales_routes_send_email_with_delivnote():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload={"Message": "OK"})
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_write_sales",
+            {"action": "sales_invoice_send_email", "id": "inv-7", "delivnote": True},
+        )
+
+        assert result.structured_content == {"Message": "OK"}
+        payload = json.loads(session.post.call_args.kwargs["data"].decode("utf-8"))
+        assert payload == {"Id": "inv-7", "DelivNote": True}
+
+    asyncio.run(scenario())
+
+
+def test_invalid_action_returns_structured_validation_error():
+    async def scenario():
+        session = Mock()
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool("merit_read_sales", {"action": "not_real"})
+
+        assert result.structured_content["error"] == "ValidationError"
+        assert result.structured_content["tool"] == "merit_read_sales"
+        assert "invoice_get" in result.structured_content["allowed_actions"]
+
+    asyncio.run(scenario())
+
+
+def test_missing_required_field_returns_structured_validation_error():
+    async def scenario():
+        session = Mock()
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool("merit_read_financial", {"action": "expense_payments_list"})
+
+        assert result.structured_content["error"] == "ValidationError"
+        assert set(result.structured_content["missing_fields"]) == {"bank_id", "filters"}
+
+    asyncio.run(scenario())
+
+
+def test_mcp_resources_and_prompts_reference_consolidated_tools():
     async def scenario():
         server = build_mcp_server(env={})
         resources = await server.list_resources()
@@ -126,7 +358,7 @@ def test_mcp_resources_and_prompts_are_available():
 
         info = await server.read_resource("merit://server/info")
         catalog = await server.read_resource("merit://tools/catalog")
-        setup_prompt = await server.render_prompt("setup-merit-api")
+        invoice_prompt = await server.render_prompt("create-sales-invoice")
         customer_prompt = await server.render_prompt(
             "find-or-create-customer",
             {"customer_name": "Acme"},
@@ -136,8 +368,10 @@ def test_mcp_resources_and_prompts_are_available():
         catalog_payload = json.loads(catalog.contents[0].content)
 
         assert info_payload["setup_mode"] is True
-        assert "tools" in catalog_payload
-        assert "MERIT_API_ID" in setup_prompt.messages[0].content.text
-        assert "Acme" in customer_prompt.messages[0].content.text
+        assert [tool["name"] for tool in catalog_payload["tools"]] == [spec.name for spec in get_tool_specs()]
+        assert any(action["name"] == "customers_list" for action in catalog_payload["tools"][0]["actions"])
+        assert "merit_read_master_data" in invoice_prompt.messages[0].content.text
+        assert "merit_write_sales" in invoice_prompt.messages[0].content.text
+        assert "merit_write_customers" in customer_prompt.messages[0].content.text
 
     asyncio.run(scenario())

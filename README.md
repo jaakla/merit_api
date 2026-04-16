@@ -138,71 +138,29 @@ Server sisaldab praegu 3 sisseehitatud prompti:
 | Ressurss | Kirjeldus |
 |---|---|
 | `merit://server/info` | Serveri metaandmed, seadistusrežiimi staatus, toetatud env muutujad ja hoiatus |
-| `merit://tools/catalog` | Tööriistade kataloog koos namespace'i, meetodi, read-only/mutating staatuse ja parameetrirežiimiga |
+| `merit://tools/catalog` | Tööriistade kataloog koos konsolideeritud tööriistade, nende action'ite ja nõutud väljadega |
 
 ## Tööriistade pind
 
-MCP server eksponeerib praegu otse olemasoleva SDK pinna.
+MCP server eksponeerib kompaktset domeenipõhist pinda. Iga tööriist kasutab `action` välja, et valida konkreetne Merit'i workflow.
 
-Kliendid:
+Read-only tööriistad:
 
-- `customers_get_list`
-- `customers_send`
+- `merit_read_master_data`
+- `merit_read_sales`
+- `merit_read_purchases`
+- `merit_read_financial`
+- `merit_read_inventory`
+- `merit_read_reports`
 
-Hankijad:
+Mutating tööriistad:
 
-- `vendors_get_list`
-- `vendors_send`
+- `merit_write_customers`
+- `merit_write_sales`
+- `merit_write_purchases`
+- `merit_write_financial`
 
-Artiklid:
-
-- `items_get_list`
-- `items_add`
-- `items_update`
-
-Müük:
-
-- `sales_get_invoices`
-- `sales_get_invoice`
-- `sales_send_invoice`
-- `sales_delete_invoice`
-- `sales_send_credit_invoice`
-- `sales_get_offers`
-- `sales_get_recurring_invoices`
-
-Ostud:
-
-- `purchases_get_invoices`
-- `purchases_send_invoice`
-
-Finants:
-
-- `financial_get_payments`
-- `financial_create_payment`
-- `financial_get_gl_batches`
-- `financial_get_banks`
-- `financial_get_costs`
-- `financial_get_projects`
-
-Ladu:
-
-- `inventory_get_movements`
-
-Põhivara:
-
-- `assets_get_fixed_assets`
-
-Maksud:
-
-- `taxes_get_list`
-- `taxes_send`
-
-Dimensioonid:
-
-- `dimensions_get_list`
-- `dimensions_add`
-
-Kirjutavad tööriistad on selgelt märgistatud mutating-tööriistadena nii kirjeldustes kui ka tööriistakataloogi ressursis.
+Kõigi tööriistade täielik action-kataloog on ressursis `merit://tools/catalog`.
 
 ## Kasutusnäited
 
@@ -212,25 +170,25 @@ Kui MCP server on ühendatud, saad AI assistendiga suhelda loomulikus keeles.
 
 > "Näita kliente, mis vastavad nimele Acme"
 
-Assistant peaks kasutama `customers_get_list` tööriista koos `Name` filtriga.
+Assistant peaks kasutama `merit_read_master_data` tööriista action'iga `customers_list` ja `filters={"Name": "Acme"}`.
 
 ### Loo või uuenda klienti
 
 > "Loo uus klient Example OÜ"
 
-Assistant peaks koostama kliendi payloadi ja kutsuma `customers_send`.
+Assistant peaks koostama kliendi payloadi ja kutsuma `merit_write_customers` tööriista action'iga `customer_upsert`.
 
 ### Loo müügiarve
 
 > "Loo kliendile Acme müügiarve aprilli konsultatsiooniteenuse eest"
 
-Assistant saab kasutada `customers_get_list`, vajadusel `find-or-create-customer`, ja seejärel `sales_send_invoice`.
+Assistant saab kasutada `merit_read_master_data` action'iga `customers_list`, vajadusel `find-or-create-customer`, ja seejärel `merit_write_sales` action'iga `sales_invoice_create`.
 
 ### Uuri viiteandmeid
 
 > "Mis pangad, kulukohad, projektid ja maksud Merit'is olemas on?"
 
-Assistant saab kasutada `financial_get_banks`, `financial_get_costs`, `financial_get_projects` ja `taxes_get_list`.
+Assistant saab kasutada `merit_read_master_data` tööriista action'eid `banks_list`, `cost_centers_list`, `projects_list` ja `taxes_list`.
 
 ### Kontrolli seadistuse seisu
 

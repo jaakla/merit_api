@@ -39,9 +39,9 @@ def build_mcp_server(
     tool_specs = get_tool_specs()
 
     instructions = (
-        "Merit API MCP server for the current Python SDK. "
-        "Read-only tools can inspect customers, invoices, payments, and reference data. "
-        "Mutating tools can create, update, or delete live accounting records."
+        "Merit API MCP server with compact domain-based tools. "
+        "Read tools cover master data, sales, purchases, financial data, inventory, and reports. "
+        "Write tools cover common customer, sales, purchase, and financial workflows."
     )
     mcp = FastMCP("merit-api", instructions=instructions, version=_package_version())
 
@@ -72,7 +72,10 @@ def build_mcp_server(
                 destructiveHint=spec.mutating,
                 idempotentHint=not spec.mutating,
             ),
-            meta={"namespace": spec.namespace, "mutating": spec.mutating},
+            meta={
+                "mutating": spec.mutating,
+                "actions": [action.name for action in spec.actions],
+            },
         )(handler)
 
     register_resources(

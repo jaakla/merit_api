@@ -26,10 +26,10 @@ def register_prompts(mcp: FastMCP) -> None:
     def create_sales_invoice(invoice_summary: str = "Create a new sales invoice") -> str:
         return (
             f"{invoice_summary}\n"
-            "1. Use customers_get_list to find the customer.\n"
-            "2. If needed, use customers_send to create or update the customer.\n"
+            "1. Use merit_read_master_data with action='customers_list' to find the customer.\n"
+            "2. If needed, use merit_write_customers with action='customer_upsert' to create or update the customer.\n"
             "3. Build the invoice payload.\n"
-            "4. Use sales_send_invoice to create the invoice.\n"
+            "4. Use merit_write_sales with action='sales_invoice_create' to create the invoice.\n"
             "5. Validate the returned invoice identifiers and totals."
         )
 
@@ -41,8 +41,8 @@ def register_prompts(mcp: FastMCP) -> None:
     def find_or_create_customer(customer_name: str) -> str:
         return (
             f"Find or create the customer named {customer_name!r}.\n"
-            "1. Search with customers_get_list using a Name filter.\n"
+            "1. Search with merit_read_master_data using action='customers_list' and a Name filter.\n"
             "2. If a confident match exists, use that record.\n"
-            "3. Otherwise construct a customer payload and call customers_send.\n"
+            "3. Otherwise construct a customer payload and call merit_write_customers with action='customer_upsert'.\n"
             "4. Confirm the resulting customer id before using it in downstream invoice flows."
         )

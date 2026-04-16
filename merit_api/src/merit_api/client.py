@@ -17,6 +17,9 @@ from .namespaces import (
     Inventory,
     Items,
     Purchases,
+    Pricing,
+    ReferenceData,
+    Reports,
     Sales,
     Taxes,
     Vendors,
@@ -72,6 +75,9 @@ class MeritAPI:
         self.assets = Assets(self)
         self.taxes = Taxes(self)
         self.dimensions = Dimensions(self)
+        self.pricing = Pricing(self)
+        self.reports = Reports(self)
+        self.reference = ReferenceData(self)
 
     def _serialize_body(self, body: Any) -> str:
         """Serialize request bodies deterministically for signing and transport."""
@@ -254,6 +260,71 @@ class MeritAPI:
 
             self._raise_for_business_error(payload)
             return payload
+
+        raise MeritAPIError(f"Request failed after retries for {url}")
+
+    def _get(
+        self,
+        endpoint: str,
+        query: Optional[dict[str, Any]] = None,
+        version: str = "v1",
+    ) -> Any:
+        """Make a GET request to the API with signed auth params and extra query params."""
+        query = query or {}
+        serialized_body = ""
+        auth_params = self._authenticate(serialized_body)
+        url = f"{self.base_url}{version}/{endpoint.lstrip('/')}"
+        headers: JsonDict = {"Accept": "application/json"}
+        params = {**auth_params, **query}
+
+        for attempt in range(self.max_retries + 1):
+            self._log_request(
+                url=url,
+                endpoint=endpoint,
+                version=version,
+                body=query,
+                headers=headers,
+                auth_params=auth_params,
+                attempt=attempt + 1,
+            )
+            try:
+                response = self.session.get(
+                    url,
+                    params=params,
+                    headers=headers,
+                    timeout=self.timeout,
+                )
+            except requests.exceptions.RequestException as exc:
+                if attempt < self.max_retries:
+                    time.sleep(self.retry_backoff * (attempt + 1))
+                    continue
+                raise MeritAPIError(f"Request failed: {exc}") from exc
+
+            try:
+                payload = response.json()
+            except ValueError:
+                payload = None
+
+            self._log_response(url=url, endpoint=endpoint, response=response, payload=payload)
+
+            if response.status_code != 200:
+                if response.status_code in self.RETRYABLE_STATUS_CODES and attempt < self.max_retries:
+                    time.sleep(self.retry_backoff * (attempt + 1))
+                    continue
+                raise MeritAPIError(
+                    f"API Error ({response.status_code}) at {url}: {response.text}",
+                    status_code=response.status_code,
+                    response_body=payload if payload is not None else response.text,
+                )
+
+            if payload is not None:
+                self._raise_for_business_error(payload)
+                return payload
+
+            if response.text:
+                return response.text
+
+            return None
 
         raise MeritAPIError(f"Request failed after retries for {url}")
 
