@@ -39,16 +39,85 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("items_update", "items", "update", "Update an item.", "payload", True),
     ToolSpec("sales_get_invoices", "sales", "get_invoices", "List sales invoices for a date range or filters.", "filters"),
     ToolSpec("sales_get_invoice", "sales", "get_invoice", "Fetch one sales invoice by id.", "id_with_attachment"),
-    ToolSpec("sales_send_invoice", "sales", "send_invoice", "Create a sales invoice.", "payload", True),
+    ToolSpec(
+        "sales_send_invoice",
+        "sales",
+        "send_invoice",
+        (
+            "Create a sales invoice. "
+            "REQUIRED STRUCTURE: "
+            "(1) Customer: {Id} for existing customer, or {Name, RegNo, CountryCode} to create on the fly. "
+            "(2) InvoiceRow[]: each row needs Item:{Code, Description, UOMName} nested object, "
+            "plus Quantity, Price, TaxId (on the row itself). "
+            "(3) TaxAmount: [{TaxId, Amount}] array — one entry per distinct tax rate used. "
+            "(4) DocDate/DueDate: YYYYmmdd strings. InvoiceNo is optional (auto-assigned if omitted). "
+            "Call taxes_get_list first to obtain valid TaxId GUIDs for the account."
+        ),
+        "payload",
+        True,
+    ),
     ToolSpec("sales_delete_invoice", "sales", "delete_invoice", "Delete a sales invoice by id.", "id", True),
-    ToolSpec("sales_send_credit_invoice", "sales", "send_credit_invoice", "Create a credit invoice.", "payload", True),
-    ToolSpec("sales_send_invoice_by_email", "sales", "send_invoice_by_email", "Send a sales invoice by email to the customer.", "id_with_delivnote", True),
-    ToolSpec("sales_send_invoice_by_einvoice", "sales", "send_invoice_by_einvoice", "Send a sales invoice as a structured e-invoice.", "id", True),
+    ToolSpec(
+        "sales_send_credit_invoice",
+        "sales",
+        "send_credit_invoice",
+        (
+            "Create a credit (reversal) invoice. "
+            "Same structure as sales_send_invoice but with negative Quantity, Price, TaxAmount.Amount, "
+            "and TotalAmount. Use the original invoice's customer and item codes."
+        ),
+        "payload",
+        True,
+    ),
+    ToolSpec(
+        "sales_send_invoice_by_email",
+        "sales",
+        "send_invoice_by_email",
+        (
+            "Send a sales invoice by email to the customer. "
+            "Requires the invoice SIHId. "
+            "Set delivnote=true to send without prices (delivery note mode). "
+            "Returns 'OK' on success or an error message from the mail server."
+        ),
+        "id_with_delivnote",
+        True,
+    ),
+    ToolSpec(
+        "sales_send_invoice_by_einvoice",
+        "sales",
+        "send_invoice_by_einvoice",
+        (
+            "Send a sales invoice as a structured e-invoice. "
+            "Requires the invoice SIHId. "
+            "Set delivnote=true to send without prices. "
+            "Returns 'OK' on success, or fails with 'api-noeinv' if the recipient has no e-invoice capability. "
+            "The customer must have an e-invoice operator configured in Merit."
+        ),
+        "id_with_delivnote",
+        True,
+    ),
     ToolSpec("sales_get_invoice_pdf", "sales", "get_invoice_pdf", "Get a sales invoice as a PDF document (returns base64-encoded content).", "id"),
     ToolSpec("sales_get_offers", "sales", "get_offers", "List sales offers.", "filters"),
     ToolSpec("sales_get_recurring_invoices", "sales", "get_recurring_invoices", "List recurring invoices.", "filters"),
     ToolSpec("purchases_get_invoices", "purchases", "get_invoices", "List purchase invoices. PeriodStart/PeriodEnd (YYYYmmdd, max 3 months range) default to last 3 months if omitted.", "filters"),
-    ToolSpec("purchases_send_invoice", "purchases", "send_invoice", "Create a purchase invoice.", "payload", True),
+    ToolSpec(
+        "purchases_send_invoice",
+        "purchases",
+        "send_invoice",
+        (
+            "Create a purchase invoice. "
+            "REQUIRED STRUCTURE: "
+            "(1) Vendor: {Id, Name} — both fields required even for existing vendors. "
+            "(2) InvoiceRow[]: each row needs Item:{Code, Description, UOMName, TaxId} nested object, "
+            "plus Quantity, Price, TaxId (on the row itself), GLAccountCode. "
+            "(3) TaxAmount: [{TaxId, Amount}] array — one entry per distinct tax rate used. "
+            "(4) DocDate/DueDate/TransactionDate: YYYYmmdd strings. "
+            "(5) Attachment (optional): {FileName, FileContent} where FileContent is a base64-encoded PDF. "
+            "Call taxes_get_list first to obtain valid TaxId GUIDs for the account."
+        ),
+        "payload",
+        True,
+    ),
     ToolSpec("financial_get_payments", "financial", "get_payments", "List payments for a date range or filters.", "filters"),
     ToolSpec("financial_create_payment", "financial", "create_payment", "Create a payment.", "payload", True),
     ToolSpec("financial_get_gl_batches", "financial", "get_gl_batches", "List GL batches for a date range or filters.", "filters"),
@@ -123,7 +192,7 @@ def build_tool_handler(
     client_getter: Callable[[], Any],
     setup_payload_builder: Callable[..., dict],
 ) -> Callable[..., Any]:
-    def handler(*args: Any, **kwargs: Any) -> Any:
+    def handler(**kwargs: Any) -> Any:
         client = client_getter()
         if client is None:
             return setup_payload_builder(blocked_tool=spec.name, blocked_api_method=spec.api_method)
