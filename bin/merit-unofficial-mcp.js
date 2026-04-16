@@ -67,8 +67,10 @@ function findPython() {
 }
 
 function runChecked(command, args, options = {}) {
+  // stdout is redirected to stderr so that pip/venv install output does not
+  // pollute stdout, which the MCP client reads as JSON-RPC messages.
   const result = spawnSync(command, args, {
-    stdio: "inherit",
+    stdio: ["inherit", process.stderr, "inherit"],
     ...options,
   });
   if (result.error) {
