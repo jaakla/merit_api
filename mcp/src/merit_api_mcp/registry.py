@@ -358,7 +358,11 @@ def _write_financial_actions() -> tuple[ActionSpec, ...]:
     return (
         _payload_action(
             "purchase_invoice_payment_create",
-            "Create a purchase invoice payment.",
+            "Create a payment for a purchase invoice. "
+            "Payload fields: BankId (guid, required), VendorName (str, required), "
+            "PaymentDate (YYYYmmddHHii, required), BillNo (invoice number, required), "
+            "Amount (decimal, required), CurrencyCode (str, only for non-EUR payments). "
+            "Uses v1/sendPaymentV for EUR; v2/sendPaymentV when CurrencyCode is present.",
             "financial.create_payment",
             lambda c: c.financial.create_payment,
             payload_kind="dict",

@@ -340,6 +340,68 @@ def test_missing_required_field_returns_structured_validation_error():
     asyncio.run(scenario())
 
 
+def test_connected_mode_write_financial_routes_payment_create_eur_uses_v1():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload={"InvoiceId": "pay-1"})
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_write_financial",
+            {
+                "action": "purchase_invoice_payment_create",
+                "payload": {
+                    "BankId": "bank-guid-1",
+                    "VendorName": "Acme Inc",
+                    "PaymentDate": "202604170000",
+                    "BillNo": "S260214",
+                    "Amount": 0.01,
+                },
+            },
+        )
+
+        assert result.structured_content == {"InvoiceId": "pay-1"}
+        assert session.post.call_args.args[0].endswith("/v1/sendPaymentV")
+
+    asyncio.run(scenario())
+
+
+def test_connected_mode_write_financial_routes_payment_create_foreign_currency_uses_v2():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload={"InvoiceId": "pay-2"})
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_write_financial",
+            {
+                "action": "purchase_invoice_payment_create",
+                "payload": {
+                    "BankId": "bank-guid-2",
+                    "VendorName": "Acme Inc",
+                    "PaymentDate": "202604170000",
+                    "BillNo": "USD-001",
+                    "Amount": 5.00,
+                    "CurrencyCode": "USD",
+                    "CurrencyRate": 0.92,
+                },
+            },
+        )
+
+        assert result.structured_content == {"InvoiceId": "pay-2"}
+        assert session.post.call_args.args[0].endswith("/v2/sendPaymentV")
+
+    asyncio.run(scenario())
+
+
 def test_mcp_resources_and_prompts_reference_consolidated_tools():
     async def scenario():
         server = build_mcp_server(env={})
