@@ -44,6 +44,20 @@ class Vendors(Namespace):
         """Create or update a vendor."""
         return self._client._post("sendvendor", vendor)
 
+    def update(self, vendor: Dict[str, Any]) -> Dict:
+        """Update an existing vendor. Only Id is required; all other fields are optional.
+
+        Use this to keep vendor records current when new invoices arrive — especially
+        to sync BankAccount (IBAN) and SWIFT_BIC so future payments can be made without
+        manual IBAN lookup.
+
+        v2 fields: Id (guid, required), Name, CountryCode, Address, City, PostalCode,
+        PhoneNo, PhoneNo2, Email, RegNo, VatRegNo, SalesInvLang, VatAccountable,
+        BankAccount, ReferenceNo, VendGrCode, VendGrId, PayerReceiverName,
+        Dimensions ([{DimId, DimValueId, DimCode}]).
+        """
+        return self._client._post("updatevendor", vendor, version="v2")
+
 
 class Items(Namespace):
     def get_list(self, **kwargs) -> List[Dict]:
@@ -293,7 +307,26 @@ class Financial(Namespace):
         return self._client._get(f"Banks/{bank_id}/IncomePayments", kwargs, version="v2")
 
     def create_payment(self, payment: Dict[str, Any]) -> Dict:
-        """Create a payment (payment of purchase invoice). Use V2 for non-local currency payments."""
+        """Create a payment (payment of purchase invoice). Use V2 for non-local currency payments.
+
+        If IBAN is absent, looks up the vendor's BankAccount by VendorName automatically.
+        Raises ValueError if IBAN cannot be resolved — prevents silent internal payments.
+        """
+        if not payment.get("IBAN"):
+            vendor_name = payment.get("VendorName", "")
+            if vendor_name:
+                vendors = self._client.vendors.get_list(Name=vendor_name)
+                vendor = next((v for v in vendors if v.get("Name") == vendor_name), None)
+                if vendor and vendor.get("BankAccount"):
+                    payment = {**payment, "IBAN": vendor["BankAccount"]}
+
+        if not payment.get("IBAN"):
+            vendor_name = payment.get("VendorName", "unknown")
+            raise ValueError(
+                f"IBAN is missing for vendor '{vendor_name}'. "
+                "Add IBAN to the payload or update the vendor's bank account in Merit."
+            )
+
         version = "v2" if payment.get("CurrencyCode") else "v1"
         return self._client._post("sendPaymentV", payment, version=version)
 

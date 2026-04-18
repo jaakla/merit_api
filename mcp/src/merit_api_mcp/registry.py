@@ -311,6 +311,19 @@ def _write_customer_actions() -> tuple[ActionSpec, ...]:
     return (
         _payload_action("customer_upsert", "Create or update a customer.", "customers.send", lambda c: c.customers.send, payload_kind="dict"),
         _payload_action("vendor_upsert", "Create or update a vendor.", "vendors.send", lambda c: c.vendors.send, payload_kind="dict"),
+        _payload_action(
+            "vendor_update",
+            "Update an existing vendor by Id. Only Id is required; all other fields are optional. "
+            "Typical use: after receiving a new purchase invoice (e.g. as PDF), verify and sync "
+            "the vendor's BankAccount (IBAN) and SWIFT_BIC so future payments require no manual lookup. "
+            "Payload fields: Id (guid, required), Name, CountryCode, Address, City, PostalCode, "
+            "PhoneNo, PhoneNo2, Email, RegNo, VatRegNo, SalesInvLang, VatAccountable, "
+            "BankAccount, ReferenceNo, VendGrCode, VendGrId, PayerReceiverName, "
+            "Dimensions ([{DimId, DimValueId, DimCode}]).",
+            "vendors.update",
+            lambda c: c.vendors.update,
+            payload_kind="dict",
+        ),
     )
 
 
@@ -361,8 +374,10 @@ def _write_financial_actions() -> tuple[ActionSpec, ...]:
             "Create a payment for a purchase invoice. "
             "Payload fields: BankId (guid, required), VendorName (str, required), "
             "PaymentDate (YYYYmmddHHii, required), BillNo (invoice number, required), "
-            "Amount (decimal, required), CurrencyCode (str, only for non-EUR payments). "
-            "Uses v1/sendPaymentV for EUR; v2/sendPaymentV when CurrencyCode is present.",
+            "Amount (decimal, required), IBAN (str, auto-fetched from vendor if omitted), "
+            "CurrencyCode (str, only for non-EUR payments). "
+            "Uses v1/sendPaymentV for EUR; v2/sendPaymentV when CurrencyCode is present. "
+            "Raises error if IBAN is missing and cannot be found from the vendor's bank account.",
             "financial.create_payment",
             lambda c: c.financial.create_payment,
             payload_kind="dict",
@@ -485,7 +500,10 @@ def build_tool_handler(
                 payload_kind="list",
             )
 
-        return selected.invoke(client, args)
+        try:
+            return selected.invoke(client, args)
+        except ValueError as exc:
+            return {"error": "ValueError", "message": str(exc)}
 
     handler.__name__ = spec.name
     handler.__doc__ = spec.mcp_description

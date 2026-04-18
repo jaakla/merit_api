@@ -241,6 +241,36 @@ def test_connected_mode_write_customers_routes_customer_upsert():
     asyncio.run(scenario())
 
 
+def test_connected_mode_write_customers_routes_vendor_update():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload={"Id": "vend-1"})
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_write_customers",
+            {
+                "action": "vendor_update",
+                "payload": {
+                    "Id": "vend-1",
+                    "BankAccount": "EE382200221020145685",
+                    "SWIFT_BIC": "HABAEE2X",
+                },
+            },
+        )
+
+        assert result.structured_content == {"Id": "vend-1"}
+        assert session.post.call_args.args[0].endswith("/v2/updatevendor")
+        sent_body = json.loads(session.post.call_args.kwargs["data"].decode())
+        assert sent_body["BankAccount"] == "EE382200221020145685"
+
+    asyncio.run(scenario())
+
+
 def test_connected_mode_write_purchases_routes_purchase_invoice_create():
     async def scenario():
         session = Mock()
@@ -360,6 +390,7 @@ def test_connected_mode_write_financial_routes_payment_create_eur_uses_v1():
                     "PaymentDate": "202604170000",
                     "BillNo": "S260214",
                     "Amount": 0.01,
+                    "IBAN": "EE382200221020145685",
                 },
             },
         )
@@ -390,6 +421,7 @@ def test_connected_mode_write_financial_routes_payment_create_foreign_currency_u
                     "PaymentDate": "202604170000",
                     "BillNo": "USD-001",
                     "Amount": 5.00,
+                    "IBAN": "EE382200221020145685",
                     "CurrencyCode": "USD",
                     "CurrencyRate": 0.92,
                 },
@@ -398,6 +430,80 @@ def test_connected_mode_write_financial_routes_payment_create_foreign_currency_u
 
         assert result.structured_content == {"InvoiceId": "pay-2"}
         assert session.post.call_args.args[0].endswith("/v2/sendPaymentV")
+
+    asyncio.run(scenario())
+
+
+def test_connected_mode_write_financial_payment_create_auto_fetches_iban_from_vendor():
+    async def scenario():
+        def post_side_effect(url, **_):
+            if "getvendors" in url:
+                return _mock_response(
+                    status_code=200,
+                    payload=[{"Name": "Acme Inc", "BankAccount": "EE382200221020145685"}],
+                )
+            return _mock_response(status_code=200, payload={"InvoiceId": "pay-3"})
+
+        session = Mock()
+        session.post.side_effect = post_side_effect
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_write_financial",
+            {
+                "action": "purchase_invoice_payment_create",
+                "payload": {
+                    "BankId": "bank-guid-1",
+                    "VendorName": "Acme Inc",
+                    "PaymentDate": "202604170000",
+                    "BillNo": "S260214",
+                    "Amount": 0.01,
+                },
+            },
+        )
+
+        assert result.structured_content == {"InvoiceId": "pay-3"}
+        payment_call = session.post.call_args
+        assert payment_call.args[0].endswith("/v1/sendPaymentV")
+        sent_body = json.loads(payment_call.kwargs["data"].decode())
+        assert sent_body["IBAN"] == "EE382200221020145685"
+
+    asyncio.run(scenario())
+
+
+def test_connected_mode_write_financial_payment_create_raises_when_iban_not_found():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(
+            status_code=200,
+            payload=[{"Name": "Acme Inc"}],
+        )
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_write_financial",
+            {
+                "action": "purchase_invoice_payment_create",
+                "payload": {
+                    "BankId": "bank-guid-1",
+                    "VendorName": "Acme Inc",
+                    "PaymentDate": "202604170000",
+                    "BillNo": "S260214",
+                    "Amount": 0.01,
+                },
+            },
+        )
+
+        assert "IBAN" in str(result.structured_content)
+        assert "Acme Inc" in str(result.structured_content)
 
     asyncio.run(scenario())
 
