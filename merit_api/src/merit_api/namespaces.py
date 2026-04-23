@@ -3,6 +3,18 @@ from typing import Any, Dict, List
 import base64
 
 
+def _to_yyyymmdd(date_str: str) -> str:
+    """Normalize Merit date strings to YYYYMMDD for API fields like PaymentDate.
+
+    Merit invoice lists return DueDate as ISO 8601 (2026-05-02T00:00:00),
+    but sendPaymentV expects YYYYMMDD (20260502).
+    Already-correct 8-char strings are returned unchanged.
+    """
+    if len(date_str) == 8 and date_str.isdigit():
+        return date_str
+    return datetime.fromisoformat(date_str).strftime("%Y%m%d")
+
+
 class Namespace:
     """Base class for API namespaces."""
 
@@ -307,10 +319,16 @@ class Financial(Namespace):
         return self._client._get(f"Banks/{bank_id}/IncomePayments", kwargs, version="v2")
 
     def create_payment(self, payment: Dict[str, Any]) -> Dict:
-        """Create a payment (payment of purchase invoice). Use V2 for non-local currency payments.
+        """Create a payment for a purchase invoice (sendPaymentV).
 
-        If IBAN is absent, looks up the vendor's BankAccount by VendorName automatically.
-        Raises ValueError if IBAN cannot be resolved — prevents silent internal payments.
+        Auto-resolves missing fields before sending:
+        - IBAN: looked up from the vendor's BankAccount by VendorName.
+        - PaymentDate: looked up from the invoice's DueDate by BillNo.
+
+        Raises ValueError if either field cannot be resolved, preventing a silent
+        internal payment without bank transfer details.
+
+        Returns the raw Merit API response (all fields as-is).
         """
         if not payment.get("IBAN"):
             vendor_name = payment.get("VendorName", "")
@@ -325,6 +343,25 @@ class Financial(Namespace):
             raise ValueError(
                 f"IBAN is missing for vendor '{vendor_name}'. "
                 "Add IBAN to the payload or update the vendor's bank account in Merit."
+            )
+
+        if not payment.get("PaymentDate"):
+            bill_no = payment.get("BillNo", "")
+            if bill_no:
+                today = datetime.now()
+                invoices = self._client.purchases.get_invoices(
+                    PeriodStart=(today - timedelta(days=365)).strftime("%Y%m%d"),
+                    PeriodEnd=(today + timedelta(days=730)).strftime("%Y%m%d"),
+                )
+                invoice = next((i for i in invoices if i.get("BillNo") == bill_no), None)
+                if invoice and invoice.get("DueDate"):
+                    payment = {**payment, "PaymentDate": _to_yyyymmdd(invoice["DueDate"])}
+
+        if not payment.get("PaymentDate"):
+            bill_no = payment.get("BillNo", "unknown")
+            raise ValueError(
+                f"PaymentDate is missing for invoice '{bill_no}' and could not be resolved "
+                "from the invoice's DueDate. Provide PaymentDate explicitly (YYYYMMDD)."
             )
 
         version = "v2" if payment.get("CurrencyCode") else "v1"

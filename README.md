@@ -155,10 +155,12 @@ Read-only tööriistad:
 
 Mutating tööriistad:
 
-- `merit_write_customers`
-- `merit_write_sales`
-- `merit_write_purchases`
-- `merit_write_financial`
+- `merit_write_customers` (eelvaade) ja `merit_write_customers_confirm` (kinnitatud muutmine)
+- `merit_write_sales` (eelvaade) ja `merit_write_sales_confirm` (kinnitatud muutmine)
+- `merit_write_purchases` (eelvaade) ja `merit_write_purchases_confirm` (kinnitatud muutmine)
+- `merit_write_financial` (eelvaade) ja `merit_write_financial_confirm` (kinnitatud muutmine)
+
+Kirjutavad tööriistad on kahe sammuga. Esimene `merit_write_*` kutse ei tee Merit'is muudatusi: see tagastab eelvaate, `confirmation_tool` nime ja unikaalse `confirmation_code` väärtuse. Pärast eelvaate ülevaatamist tuleb sama action'i ja samade argumentidega kutsuda vastavat `*_confirm` tööriista ning anda kaasa `confirmation_code` ja `confirmed=true`. Kood on seotud konkreetsete argumentidega ja seda ei saa kasutada teise muudatuse kinnitamiseks.
 
 Kõigi tööriistade täielik action-kataloog on ressursis `merit://tools/catalog`.
 
@@ -177,12 +179,14 @@ Assistant peaks kasutama `merit_read_master_data` tööriista action'iga `custom
 > "Loo uus klient Example OÜ"
 
 Assistant peaks koostama kliendi payloadi ja kutsuma `merit_write_customers` tööriista action'iga `customer_upsert`.
+See tagastab ainult eelvaate. Muudatus jõustub alles siis, kui assistant kutsub sama payloadiga `merit_write_customers_confirm`, lisab eelvaatest saadud `confirmation_code` väärtuse ja seab `confirmed=true`.
 
 ### Loo müügiarve
 
 > "Loo kliendile Acme müügiarve aprilli konsultatsiooniteenuse eest"
 
 Assistant saab kasutada `merit_read_master_data` action'iga `customers_list`, vajadusel `find-or-create-customer`, ja seejärel `merit_write_sales` action'iga `sales_invoice_create`.
+`merit_write_sales` tagastab eelvaate; arve luuakse alles `merit_write_sales_confirm` kutsega, kui kasutaja on eelvaate üle vaadanud.
 
 ### Uuri viiteandmeid
 

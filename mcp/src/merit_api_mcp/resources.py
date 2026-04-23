@@ -26,7 +26,7 @@ def register_resources(
             "setup_mode": setup_mode,
             "supported_env_vars": list(SUPPORTED_ENV_VARS),
             "supported_countries": list(SUPPORTED_COUNTRIES),
-            "warning": "Mutating tools operate on live accounting data.",
+            "warning": "Mutating tools operate on live accounting data and require preview plus *_confirm confirmation.",
         }
 
     @mcp.resource(

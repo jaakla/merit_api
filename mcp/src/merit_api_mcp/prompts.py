@@ -27,10 +27,14 @@ def register_prompts(mcp: FastMCP) -> None:
         return (
             f"{invoice_summary}\n"
             "1. Use merit_read_master_data with action='customers_list' to find the customer.\n"
-            "2. If needed, use merit_write_customers with action='customer_upsert' to create or update the customer.\n"
-            "3. Build the invoice payload.\n"
-            "4. Use merit_write_sales with action='sales_invoice_create' to create the invoice.\n"
-            "5. Validate the returned invoice identifiers and totals."
+            "2. If needed, call merit_write_customers with action='customer_upsert' to preview the customer create/update.\n"
+            "3. After the user reviews that preview, call merit_write_customers_confirm with the same arguments, "
+            "the returned confirmation_code, and confirmed=true.\n"
+            "4. Build the invoice payload.\n"
+            "5. Call merit_write_sales with action='sales_invoice_create' to preview the invoice creation.\n"
+            "6. After the user reviews that preview, call merit_write_sales_confirm with the same arguments, "
+            "the returned confirmation_code, and confirmed=true.\n"
+            "7. Validate the returned invoice identifiers and totals."
         )
 
     @mcp.prompt(
@@ -43,6 +47,9 @@ def register_prompts(mcp: FastMCP) -> None:
             f"Find or create the customer named {customer_name!r}.\n"
             "1. Search with merit_read_master_data using action='customers_list' and a Name filter.\n"
             "2. If a confident match exists, use that record.\n"
-            "3. Otherwise construct a customer payload and call merit_write_customers with action='customer_upsert'.\n"
-            "4. Confirm the resulting customer id before using it in downstream invoice flows."
+            "3. Otherwise construct a customer payload and call merit_write_customers with action='customer_upsert' "
+            "to preview the write.\n"
+            "4. After the user reviews the preview, call merit_write_customers_confirm with the same arguments, "
+            "the returned confirmation_code, and confirmed=true.\n"
+            "5. Confirm the resulting customer id before using it in downstream invoice flows."
         )

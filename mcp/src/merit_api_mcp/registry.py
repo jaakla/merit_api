@@ -1,10 +1,14 @@
+import hashlib
+import json
+import secrets
 from dataclasses import dataclass
 from inspect import Parameter, Signature
-from typing import Any, Callable, Literal, Sequence
+from typing import Any, Callable, Literal, MutableMapping, Sequence
 
 
 PayloadKind = Literal["dict", "list"]
 Invoker = Callable[[Any, dict[str, Any]], Any]
+CONFIRM_TOOL_SUFFIX = "_confirm"
 
 
 @dataclass(frozen=True)
@@ -30,8 +34,29 @@ class ToolSpec:
 
     @property
     def mcp_description(self) -> str:
+        if self.mutating:
+            return (
+                "Preview-only write tool. Does not execute changes; returns intended operation details "
+                f"and a confirmation_code for {self.confirm_name}. {self.description}"
+            )
         prefix = "Mutating tool." if self.mutating else "Read-only tool."
         return f"{prefix} {self.description}"
+
+    @property
+    def confirm_name(self) -> str:
+        return f"{self.name}{CONFIRM_TOOL_SUFFIX}"
+
+    @property
+    def confirm_title(self) -> str:
+        return f"{self.title} Confirm"
+
+    @property
+    def confirm_mcp_description(self) -> str:
+        return (
+            "Confirmed mutating tool. Executes a previously previewed write operation "
+            f"from {self.name} when called with confirmation_code and confirmed=true. "
+            f"{self.description}"
+        )
 
 
 def _filters_action(name: str, description: str, api_method: str, getter: Callable[[Any], Callable[..., Any]]) -> ActionSpec:
@@ -105,8 +130,86 @@ def _validation_error(
     return error
 
 
+def _confirmation_error(
+    *,
+    tool_name: str,
+    action: str | None,
+    message: str,
+    confirmation_code: str | None = None,
+) -> dict[str, Any]:
+    error = {
+        "error": "ConfirmationError",
+        "tool": tool_name,
+        "action": action,
+        "message": message,
+    }
+    if confirmation_code:
+        error["confirmation_code"] = confirmation_code
+    return error
+
+
 def _action_map(spec: ToolSpec) -> dict[str, ActionSpec]:
     return {action.name: action for action in spec.actions}
+
+
+def _serializable_args(args: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in args.items() if value not in (None, "", [])}
+
+
+def _confirmation_intent(spec: ToolSpec, selected: ActionSpec, args: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "tool": spec.name,
+        "confirmation_tool": spec.confirm_name,
+        "action": selected.name,
+        "api_method": selected.api_method,
+        "arguments": _serializable_args(args),
+    }
+
+
+def _intent_digest(intent: dict[str, Any]) -> str:
+    canonical = json.dumps(intent, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _new_confirmation_code(store: MutableMapping[str, dict[str, Any]]) -> str:
+    while True:
+        code = secrets.token_urlsafe(12)
+        if code not in store:
+            return code
+
+
+def _preview_payload(
+    *,
+    spec: ToolSpec,
+    selected: ActionSpec,
+    args: dict[str, Any],
+    confirmation_store: MutableMapping[str, dict[str, Any]],
+) -> dict[str, Any]:
+    intent = _confirmation_intent(spec, selected, args)
+    confirmation_code = _new_confirmation_code(confirmation_store)
+    confirmation_store[confirmation_code] = {
+        "tool": spec.name,
+        "action": selected.name,
+        "intent_digest": _intent_digest(intent),
+    }
+    return {
+        "mode": "preview",
+        "tool": spec.name,
+        "action": selected.name,
+        "requires_confirmation": True,
+        "confirmation_tool": spec.confirm_name,
+        "confirmation_code": confirmation_code,
+        "confirmed": False,
+        "message": (
+            "Preview only. No changes were made. Review intended_operation, then call "
+            f"{spec.confirm_name} with the same arguments, confirmation_code, and confirmed=true to execute."
+        ),
+        "intended_operation": {
+            "description": selected.description,
+            "api_method": selected.api_method,
+            "arguments": intent["arguments"],
+        },
+    }
 
 
 def _read_master_data_actions() -> tuple[ActionSpec, ...]:
@@ -373,11 +476,13 @@ def _write_financial_actions() -> tuple[ActionSpec, ...]:
             "purchase_invoice_payment_create",
             "Create a payment for a purchase invoice. "
             "Payload fields: BankId (guid, required), VendorName (str, required), "
-            "PaymentDate (YYYYmmddHHii, required), BillNo (invoice number, required), "
-            "Amount (decimal, required), IBAN (str, auto-fetched from vendor if omitted), "
+            "BillNo (invoice number, required), Amount (decimal, required), "
+            "IBAN (str, auto-fetched from vendor BankAccount if omitted), "
+            "PaymentDate (YYYYMMDD, defaults to invoice DueDate if omitted), "
             "CurrencyCode (str, only for non-EUR payments). "
             "Uses v1/sendPaymentV for EUR; v2/sendPaymentV when CurrencyCode is present. "
-            "Raises error if IBAN is missing and cannot be found from the vendor's bank account.",
+            "Returns the raw Merit API response. "
+            "Raises error if IBAN or PaymentDate cannot be resolved automatically.",
             "financial.create_payment",
             lambda c: c.financial.create_payment,
             payload_kind="dict",
@@ -418,6 +523,8 @@ def _build_signature(_spec: ToolSpec) -> Signature:
         Parameter("add_attachment", kind=Parameter.POSITIONAL_OR_KEYWORD, default=False, annotation=bool),
         Parameter("delivnote", kind=Parameter.POSITIONAL_OR_KEYWORD, default=False, annotation=bool),
         Parameter("bank_id", kind=Parameter.POSITIONAL_OR_KEYWORD, default=None, annotation=str | None),
+        Parameter("confirmation_code", kind=Parameter.POSITIONAL_OR_KEYWORD, default=None, annotation=str | None),
+        Parameter("confirmed", kind=Parameter.POSITIONAL_OR_KEYWORD, default=False, annotation=bool),
     ]
     return Signature(parameters=parameters, return_annotation=Any)
 
@@ -432,6 +539,8 @@ def _build_annotations(_spec: ToolSpec) -> dict[str, Any]:
         "add_attachment": bool,
         "delivnote": bool,
         "bank_id": str | None,
+        "confirmation_code": str | None,
+        "confirmed": bool,
     }
 
 
@@ -440,9 +549,13 @@ def build_tool_handler(
     *,
     client_getter: Callable[[], Any],
     setup_payload_builder: Callable[..., dict],
+    confirmation_store: MutableMapping[str, dict[str, Any]] | None = None,
+    confirmation_mode: bool = False,
 ) -> Callable[..., Any]:
     actions = _action_map(spec)
     allowed_actions = tuple(actions)
+    pending_confirmations = confirmation_store if confirmation_store is not None else {}
+    tool_name = spec.confirm_name if confirmation_mode else spec.name
 
     def handler(
         action: str,
@@ -452,6 +565,8 @@ def build_tool_handler(
         add_attachment: bool = False,
         delivnote: bool = False,
         bank_id: str | None = None,
+        confirmation_code: str | None = None,
+        confirmed: bool = False,
     ) -> Any:
         args = {
             "action": action,
@@ -467,19 +582,19 @@ def build_tool_handler(
         client = client_getter()
         if client is None:
             return setup_payload_builder(
-                blocked_tool=spec.name,
+                blocked_tool=tool_name,
                 blocked_api_method=selected.api_method if selected is not None else None,
             )
 
         if selected is None:
-            return _validation_error(tool_name=spec.name, action=action, allowed_actions=allowed_actions)
+            return _validation_error(tool_name=tool_name, action=action, allowed_actions=allowed_actions)
 
         missing_fields = tuple(
             field_name for field_name in selected.required_fields if args[field_name] in (None, "", [])
         )
         if missing_fields:
             return _validation_error(
-                tool_name=spec.name,
+                tool_name=tool_name,
                 action=action,
                 allowed_actions=allowed_actions,
                 missing_fields=missing_fields,
@@ -487,26 +602,66 @@ def build_tool_handler(
 
         if selected.payload_kind == "dict" and not isinstance(payload, dict):
             return _validation_error(
-                tool_name=spec.name,
+                tool_name=tool_name,
                 action=action,
                 allowed_actions=allowed_actions,
                 payload_kind="dict",
             )
         if selected.payload_kind == "list" and not isinstance(payload, list):
             return _validation_error(
-                tool_name=spec.name,
+                tool_name=tool_name,
                 action=action,
                 allowed_actions=allowed_actions,
                 payload_kind="list",
             )
+
+        if spec.mutating and not confirmation_mode:
+            return _preview_payload(
+                spec=spec,
+                selected=selected,
+                args=args,
+                confirmation_store=pending_confirmations,
+            )
+
+        if spec.mutating and confirmation_mode:
+            if not confirmed:
+                return _preview_payload(
+                    spec=spec,
+                    selected=selected,
+                    args=args,
+                    confirmation_store=pending_confirmations,
+                )
+            if not confirmation_code:
+                return _confirmation_error(
+                    tool_name=tool_name,
+                    action=action,
+                    message="Missing confirmation_code. Call the preview tool first and pass the returned code.",
+                )
+            pending = pending_confirmations.get(confirmation_code)
+            if pending is None:
+                return _confirmation_error(
+                    tool_name=tool_name,
+                    action=action,
+                    confirmation_code=confirmation_code,
+                    message="Unknown or expired confirmation_code. Call the preview tool again.",
+                )
+            intent = _confirmation_intent(spec, selected, args)
+            if pending.get("tool") != spec.name or pending.get("intent_digest") != _intent_digest(intent):
+                return _confirmation_error(
+                    tool_name=tool_name,
+                    action=action,
+                    confirmation_code=confirmation_code,
+                    message="confirmation_code does not match this write operation. Use the exact arguments from the preview.",
+                )
+            pending_confirmations.pop(confirmation_code, None)
 
         try:
             return selected.invoke(client, args)
         except ValueError as exc:
             return {"error": "ValueError", "message": str(exc)}
 
-    handler.__name__ = spec.name
-    handler.__doc__ = spec.mcp_description
+    handler.__name__ = tool_name
+    handler.__doc__ = spec.confirm_mcp_description if confirmation_mode else spec.mcp_description
     handler.__signature__ = _build_signature(spec)
     handler.__annotations__ = _build_annotations(spec)
     return handler
@@ -529,6 +684,9 @@ def tool_catalog_entry(spec: ToolSpec) -> dict[str, Any]:
         "description": spec.description,
         "mutating": spec.mutating,
         "read_only": not spec.mutating,
+        "preview_only": spec.mutating,
+        "confirmation_required": spec.mutating,
+        "confirmation_tool": spec.confirm_name if spec.mutating else None,
         "when_to_use": spec.description,
         "actions": [action_catalog_entry(action) for action in spec.actions],
     }
