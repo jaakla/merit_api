@@ -19,12 +19,12 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install SDK dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev]
 
-      - name: Run tests
+      - name: Run SDK tests
         run: pytest -q
 
       - name: Regenerate method coverage report
@@ -32,3 +32,23 @@ jobs:
 
       - name: Ensure coverage report is committed
         run: git diff --exit-code reports/method_test_coverage.md
+
+  mcp-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install SDK + MCP dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ./merit_api
+          pip install -e ./mcp[dev]
+
+      - name: Run MCP tests
+        run: pytest -q mcp/tests
