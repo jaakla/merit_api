@@ -82,6 +82,7 @@ def build_mcp_server(
                 "confirmation_required": spec.mutating,
                 "confirmation_tool": spec.confirm_name if spec.mutating else None,
                 "actions": [action.name for action in spec.actions],
+                "action_descriptions": {action.name: action.description for action in spec.actions},
             },
         )(handler)
 
@@ -107,6 +108,7 @@ def build_mcp_server(
                     "confirmation_tool": True,
                     "previews_tool": spec.name,
                     "actions": [action.name for action in spec.actions],
+                    "action_descriptions": {action.name: action.description for action in spec.actions},
                 },
             )(confirm_handler)
 

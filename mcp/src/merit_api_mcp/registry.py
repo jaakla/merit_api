@@ -8,7 +8,26 @@ from typing import Any, Callable, Literal, MutableMapping, Sequence
 
 PayloadKind = Literal["dict", "list"]
 Invoker = Callable[[Any, dict[str, Any]], Any]
+PayloadValidator = Callable[[Any], tuple[str, ...]]
 CONFIRM_TOOL_SUFFIX = "_confirm"
+GOOGOLPLEX_NO_VAT_TAX_ID = "7e170b45-fe96-4048-b824-39733c33e734"
+
+SALES_INVOICE_CREATE_DESCRIPTION = (
+    "Create a draft sales invoice through Merit v1 /sendinvoice. The payload is passed through to Merit "
+    "and must use the create schema, not the invoice_get response shape. Required shape: Customer.Id, "
+    "DocDate, TransactionDate, and DueDate as YYYYMMDD strings, mandatory string InvoiceNo, CurrencyCode "
+    "(usually EUR), PriceInclVat (usually false), optional FComment footer note, singular InvoiceRow list, "
+    "TaxAmount list, and TotalAmount. "
+    "Each InvoiceRow item must use Item={Code, Description, UOMName}, Quantity, Price, row-level TaxId GUID, "
+    "and Account. Gotchas: use InvoiceRow (singular), not InvoiceRows; Merit will not auto-assign InvoiceNo, "
+    "so read merit_read_sales action=invoices_list and use the next integer; UOMName belongs inside Item; "
+    "use Account, not AccountCode; use TaxId GUID, not TaxName or TaxPct; TaxAmount is required even for zero "
+    "VAT, e.g. [{'TaxId': '<tax-guid>', 'Amount': 0}]; TotalAmount is required and should match the row "
+    "Price x Quantity total. For Googolplex no-VAT 'Ei ole käive', the known TaxId "
+    f"is {GOOGOLPLEX_NO_VAT_TAX_ID}; verify with merit_read_master_data action=taxes_list if it changes. "
+    "Do not include DelivNote/delivnote=true in invoice creation payloads; invoices should remain undelivered "
+    "drafts and delivery is handled manually in Merit."
+)
 
 
 @dataclass(frozen=True)
@@ -19,6 +38,7 @@ class ActionSpec:
     invoke: Invoker
     required_fields: tuple[str, ...] = ()
     payload_kind: PayloadKind | None = None
+    validate_payload: PayloadValidator | None = None
 
 
 @dataclass(frozen=True)
@@ -34,13 +54,14 @@ class ToolSpec:
 
     @property
     def mcp_description(self) -> str:
+        action_help = " Actions: " + "; ".join(f"{action.name}: {action.description}" for action in self.actions)
         if self.mutating:
             return (
                 "Preview-only write tool. Does not execute changes; returns intended operation details "
-                f"and a confirmation_code for {self.confirm_name}. {self.description}"
+                f"and a confirmation_code for {self.confirm_name}. {self.description}{action_help}"
             )
         prefix = "Mutating tool." if self.mutating else "Read-only tool."
-        return f"{prefix} {self.description}"
+        return f"{prefix} {self.description}{action_help}"
 
     @property
     def confirm_name(self) -> str:
@@ -55,7 +76,8 @@ class ToolSpec:
         return (
             "Confirmed mutating tool. Executes a previously previewed write operation "
             f"from {self.name} when called with confirmation_code and confirmed=true. "
-            f"{self.description}"
+            f"{self.description} Actions: "
+            + "; ".join(f"{action.name}: {action.description}" for action in self.actions)
         )
 
 
@@ -94,6 +116,7 @@ def _payload_action(
     getter: Callable[[Any], Callable[..., Any]],
     *,
     payload_kind: PayloadKind,
+    validate_payload: PayloadValidator | None = None,
 ) -> ActionSpec:
     return ActionSpec(
         name=name,
@@ -102,6 +125,7 @@ def _payload_action(
         invoke=lambda client, args: getter(client)(args["payload"]),
         required_fields=("payload",),
         payload_kind=payload_kind,
+        validate_payload=validate_payload,
     )
 
 
@@ -130,6 +154,23 @@ def _validation_error(
     return error
 
 
+def _payload_validation_error(
+    *,
+    tool_name: str,
+    action: str,
+    allowed_actions: Sequence[str],
+    validation_errors: Sequence[str],
+) -> dict[str, Any]:
+    return {
+        "error": "ValidationError",
+        "tool": tool_name,
+        "action": action,
+        "allowed_actions": list(allowed_actions),
+        "message": f"Payload failed validation for action {action!r}.",
+        "validation_errors": list(validation_errors),
+    }
+
+
 def _confirmation_error(
     *,
     tool_name: str,
@@ -146,6 +187,121 @@ def _confirmation_error(
     if confirmation_code:
         error["confirmation_code"] = confirmation_code
     return error
+
+
+def _is_blank(value: Any) -> bool:
+    return value in (None, "", [])
+
+
+def _validate_yyyymmdd(payload: dict[str, Any], field_name: str) -> str | None:
+    value = payload.get(field_name)
+    if isinstance(value, str) and len(value) == 8 and value.isdigit():
+        return None
+    return f"{field_name} must be a YYYYMMDD string, for example '20260510', not an ISO date or timestamp."
+
+
+def _sales_invoice_create_payload_errors(payload: Any) -> tuple[str, ...]:
+    if not isinstance(payload, dict):
+        return ()
+
+    errors: list[str] = []
+
+    if "Lines" in payload:
+        errors.append("Do not copy invoice_get Lines into create payloads; use create-only InvoiceRow rows.")
+    if "InvoiceRows" in payload:
+        errors.append(
+            "Use InvoiceRow (singular), not InvoiceRows. Merit may say 'InvoiceRows required', "
+            "but /sendinvoice expects InvoiceRow."
+        )
+    if payload.get("DelivNote") is True or payload.get("delivnote") is True:
+        errors.append(
+            "Do not set DelivNote/delivnote=true for sales_invoice_create; leave the invoice undelivered "
+            "and deliver manually in Merit."
+        )
+
+    required_top_fields = (
+        "Customer",
+        "DocDate",
+        "TransactionDate",
+        "DueDate",
+        "InvoiceNo",
+        "CurrencyCode",
+        "PriceInclVat",
+        "InvoiceRow",
+        "TaxAmount",
+        "TotalAmount",
+    )
+    missing_top_fields = [field for field in required_top_fields if field not in payload or _is_blank(payload[field])]
+    if missing_top_fields:
+        errors.append("Missing required top-level sales invoice fields: " + ", ".join(missing_top_fields) + ".")
+
+    customer = payload.get("Customer")
+    if isinstance(customer, dict):
+        if _is_blank(customer.get("Id")):
+            errors.append(
+                "Customer.Id is required for sales_invoice_create; find it with merit_read_master_data "
+                "action=customers_list or create the customer first."
+            )
+    elif "Customer" in payload:
+        errors.append("Customer must be an object such as {'Id': '<customer-guid>'}.")
+
+    invoice_no = payload.get("InvoiceNo")
+    if "InvoiceNo" in payload and not isinstance(invoice_no, str):
+        errors.append("InvoiceNo is mandatory and must be a string; Merit will not auto-assign it.")
+
+    for date_field in ("DocDate", "TransactionDate", "DueDate"):
+        if date_field in payload:
+            date_error = _validate_yyyymmdd(payload, date_field)
+            if date_error:
+                errors.append(date_error)
+
+    rows = payload.get("InvoiceRow")
+    row_field_name = "InvoiceRow"
+    if not isinstance(rows, list) and isinstance(payload.get("InvoiceRows"), list):
+        rows = payload["InvoiceRows"]
+        row_field_name = "InvoiceRows"
+    if "InvoiceRow" in payload and (not isinstance(rows, list) or not rows):
+        errors.append("InvoiceRow must be a non-empty list of sales invoice rows.")
+    elif isinstance(rows, list):
+        for row_index, row in enumerate(rows):
+            row_path = f"{row_field_name}[{row_index}]"
+            if not isinstance(row, dict):
+                errors.append(f"{row_path} must be an object.")
+                continue
+
+            if "UOMName" in row:
+                errors.append(f"{row_path}.UOMName is invalid at row level; put UOMName inside {row_path}.Item.")
+            if "AccountCode" in row:
+                errors.append(f"{row_path}.AccountCode is invalid for /sendinvoice; use {row_path}.Account.")
+            if "TaxName" in row or "TaxPct" in row:
+                errors.append(f"{row_path} must use TaxId GUID, not TaxName or TaxPct.")
+
+            for field_name in ("Quantity", "Price", "TaxId", "Account"):
+                if field_name not in row or _is_blank(row[field_name]):
+                    errors.append(f"{row_path}.{field_name} is required.")
+
+            item = row.get("Item")
+            if not isinstance(item, dict):
+                errors.append(f"{row_path}.Item must be an object with Code, Description, and UOMName.")
+                continue
+            for item_field in ("Code", "Description", "UOMName"):
+                if item_field not in item or _is_blank(item[item_field]):
+                    errors.append(f"{row_path}.Item.{item_field} is required.")
+
+    tax_amount = payload.get("TaxAmount")
+    if "TaxAmount" in payload and (not isinstance(tax_amount, list) or not tax_amount):
+        errors.append("TaxAmount must be a non-empty list, even when VAT amount is zero.")
+    elif isinstance(tax_amount, list):
+        for tax_index, tax_row in enumerate(tax_amount):
+            tax_path = f"TaxAmount[{tax_index}]"
+            if not isinstance(tax_row, dict):
+                errors.append(f"{tax_path} must be an object with TaxId and Amount.")
+                continue
+            for field_name in ("TaxId", "Amount"):
+                if field_name not in tax_row or _is_blank(tax_row[field_name]):
+                    errors.append(f"{tax_path}.{field_name} is required.")
+
+    return tuple(errors)
 
 
 def _action_map(spec: ToolSpec) -> dict[str, ActionSpec]:
@@ -432,7 +588,14 @@ def _write_customer_actions() -> tuple[ActionSpec, ...]:
 
 def _write_sales_actions() -> tuple[ActionSpec, ...]:
     return (
-        _payload_action("sales_invoice_create", "Create a sales invoice.", "sales.send_invoice", lambda c: c.sales.send_invoice, payload_kind="dict"),
+        _payload_action(
+            "sales_invoice_create",
+            SALES_INVOICE_CREATE_DESCRIPTION,
+            "sales.send_invoice",
+            lambda c: c.sales.send_invoice,
+            payload_kind="dict",
+            validate_payload=_sales_invoice_create_payload_errors,
+        ),
         _id_action("sales_invoice_delete", "Delete a sales invoice by id.", "sales.delete_invoice", lambda c: c.sales.delete_invoice),
         _payload_action(
             "credit_invoice_create",
@@ -443,14 +606,22 @@ def _write_sales_actions() -> tuple[ActionSpec, ...]:
         ),
         ActionSpec(
             name="sales_invoice_send_email",
-            description="Send a sales invoice by email.",
+            description=(
+                "Send a sales invoice by email. This delivers the invoice; do not use it in the normal "
+                "draft creation flow where delivery is handled manually in Merit. Keep delivnote=false unless "
+                "the user explicitly asks for delivery note mode without prices."
+            ),
             api_method="sales.send_invoice_by_email",
             invoke=lambda client, args: client.sales.send_invoice_by_email(args["id"], delivnote=args["delivnote"]),
             required_fields=("id",),
         ),
         ActionSpec(
             name="sales_invoice_send_einvoice",
-            description="Send a sales invoice as e-invoice.",
+            description=(
+                "Send a sales invoice as e-invoice. This delivers the invoice; do not use it in the normal "
+                "draft creation flow where delivery is handled manually in Merit. Keep delivnote=false unless "
+                "the user explicitly asks for delivery note mode without prices."
+            ),
             api_method="sales.send_invoice_by_einvoice",
             invoke=lambda client, args: client.sales.send_invoice_by_einvoice(args["id"], delivnote=args["delivnote"]),
             required_fields=("id",),
@@ -614,6 +785,16 @@ def build_tool_handler(
                 allowed_actions=allowed_actions,
                 payload_kind="list",
             )
+
+        if selected.validate_payload is not None:
+            validation_errors = selected.validate_payload(payload)
+            if validation_errors:
+                return _payload_validation_error(
+                    tool_name=tool_name,
+                    action=action,
+                    allowed_actions=allowed_actions,
+                    validation_errors=validation_errors,
+                )
 
         if spec.mutating and not confirmation_mode:
             return _preview_payload(

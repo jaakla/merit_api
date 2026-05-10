@@ -27,11 +27,13 @@ def main():
     customer = customers[0]
     item = items[0]
     invoice_data = {
-        "Customer": customer,
-        "DocDate": "20260406120000",
-        "DueDate": "20260413120000",
+        "Customer": {"Id": customer["Id"]},
+        "DocDate": "20260406",
+        "TransactionDate": "20260406",
+        "DueDate": "20260413",
         "InvoiceNo": "INV-12345",
-        "TotalAmount": 100,
+        "CurrencyCode": "EUR",
+        "PriceInclVat": False,
         "InvoiceRow": [
             {
                 "Item": {
@@ -42,11 +44,13 @@ def main():
                 "Quantity": 1,
                 "Price": 100,
                 "TaxId": "b9b25735-6a15-4d4e-8720-25b254ae3d21",
+                "Account": "30001",
             }
         ],
         "TaxAmount": [
             {"TaxId": "b9b25735-6a15-4d4e-8720-25b254ae3d21", "Amount": 20.00}
         ],
+        "TotalAmount": 120,
     }
 
     client._post("sendinvoice", invoice_data, version="v1")

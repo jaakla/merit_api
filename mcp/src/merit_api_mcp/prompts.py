@@ -30,11 +30,19 @@ def register_prompts(mcp: FastMCP) -> None:
             "2. If needed, call merit_write_customers with action='customer_upsert' to preview the customer create/update.\n"
             "3. After the user reviews that preview, call merit_write_customers_confirm with the same arguments, "
             "the returned confirmation_code, and confirmed=true.\n"
-            "4. Build the invoice payload.\n"
-            "5. Call merit_write_sales with action='sales_invoice_create' to preview the invoice creation.\n"
-            "6. After the user reviews that preview, call merit_write_sales_confirm with the same arguments, "
+            "4. Read merit_read_sales with action='invoices_list' to find the latest InvoiceNo, then use the next "
+            "sequential integer as a string. Merit will not auto-assign InvoiceNo.\n"
+            "5. Build the invoice payload for v1 /sendinvoice, not from invoice_get shape: Customer.Id; "
+            "DocDate, TransactionDate, DueDate as YYYYMMDD strings; CurrencyCode; PriceInclVat; singular "
+            "InvoiceRow list; TaxAmount; TotalAmount.\n"
+            "6. For each InvoiceRow, put UOMName inside Item, use row-level TaxId GUID and Account, not "
+            "TaxName, TaxPct, or AccountCode. TaxAmount is required even when zero.\n"
+            "7. Leave delivery manual in Merit: do not set DelivNote/delivnote=true and do not send by email/e-invoice "
+            "during the draft creation flow unless the user explicitly asks for delivery.\n"
+            "8. Call merit_write_sales with action='sales_invoice_create' to preview the invoice creation.\n"
+            "9. After the user reviews that preview, call merit_write_sales_confirm with the same arguments, "
             "the returned confirmation_code, and confirmed=true.\n"
-            "7. Validate the returned invoice identifiers and totals."
+            "10. Validate the returned invoice identifiers and totals."
         )
 
     @mcp.prompt(

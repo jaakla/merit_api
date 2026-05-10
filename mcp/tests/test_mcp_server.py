@@ -19,6 +19,33 @@ def _mock_response(status_code=200, payload=None, text=""):
     return response
 
 
+def _valid_sales_invoice_payload():
+    return {
+        "Customer": {"Id": "cust-1"},
+        "DocDate": "20260510",
+        "TransactionDate": "20260510",
+        "DueDate": "20260520",
+        "InvoiceNo": "21179",
+        "CurrencyCode": "EUR",
+        "PriceInclVat": False,
+        "InvoiceRow": [
+            {
+                "Item": {
+                    "Code": "SVC01",
+                    "Description": "Consulting services",
+                    "UOMName": "tk",
+                },
+                "Quantity": 1,
+                "Price": 100,
+                "TaxId": "tax-1",
+                "Account": "30001",
+            }
+        ],
+        "TaxAmount": [{"TaxId": "tax-1", "Amount": 0}],
+        "TotalAmount": 100,
+    }
+
+
 async def _preview_and_confirm(server, tool_name, arguments):
     preview = await server.call_tool(tool_name, arguments)
     preview_payload = preview.structured_content
@@ -78,6 +105,12 @@ def test_mcp_registry_exposes_consolidated_tool_names_with_stable_annotations():
                 confirm_tool = by_name[spec.confirm_name]
                 assert confirm_tool.annotations.readOnlyHint is False
                 assert confirm_tool.annotations.destructiveHint is True
+
+        write_sales_description = by_name["merit_write_sales"].description
+        assert "sales_invoice_create" in write_sales_description
+        assert "InvoiceRow (singular)" in write_sales_description
+        assert "InvoiceNo" in write_sales_description
+        assert "YYYYMMDD" in write_sales_description
 
     asyncio.run(scenario())
 
@@ -244,11 +277,59 @@ def test_connected_mode_write_sales_routes_invoice_create():
         result = await _preview_and_confirm(
             server,
             "merit_write_sales",
-            {"action": "sales_invoice_create", "payload": {"InvoiceNo": "INV-1", "Customer": {"Id": "cust-1"}}},
+            {"action": "sales_invoice_create", "payload": _valid_sales_invoice_payload()},
         )
 
         assert result.structured_content == {"Id": "inv-1", "Status": "Created"}
         assert session.post.call_args.args[0].endswith("/v1/sendinvoice")
+
+    asyncio.run(scenario())
+
+
+def test_write_sales_invoice_create_rejects_get_response_shape_before_preview():
+    async def scenario():
+        session = Mock()
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        invalid_payload = {
+            "Customer": {"Id": "cust-1"},
+            "DocDate": "2026-05-10",
+            "DueDate": "20260520",
+            "InvoiceNo": 21179,
+            "CurrencyCode": "EUR",
+            "InvoiceRows": [
+                {
+                    "Item": {"Code": "SVC01", "Description": "Consulting"},
+                    "UOMName": "tk",
+                    "Quantity": 1,
+                    "Price": 100,
+                    "TaxName": "Ei ole käive",
+                    "AccountCode": "30001",
+                }
+            ],
+            "TotalAmount": 100,
+        }
+
+        result = await server.call_tool(
+            "merit_write_sales",
+            {"action": "sales_invoice_create", "payload": invalid_payload},
+        )
+
+        assert result.structured_content["error"] == "ValidationError"
+        validation_errors = result.structured_content["validation_errors"]
+        assert any("InvoiceRow (singular)" in error for error in validation_errors)
+        assert any("TransactionDate" in error for error in validation_errors)
+        assert any("YYYYMMDD" in error for error in validation_errors)
+        assert any("InvoiceNo" in error for error in validation_errors)
+        assert any("TaxAmount" in error for error in validation_errors)
+        assert any("UOMName" in error for error in validation_errors)
+        assert any("AccountCode" in error for error in validation_errors)
+        assert any("TaxId GUID" in error for error in validation_errors)
+        assert session.post.call_count == 0
 
     asyncio.run(scenario())
 
@@ -737,8 +818,14 @@ def test_mcp_resources_and_prompts_reference_consolidated_tools():
         assert info_payload["setup_mode"] is True
         assert [tool["name"] for tool in catalog_payload["tools"]] == [spec.name for spec in get_tool_specs()]
         assert any(action["name"] == "customers_list" for action in catalog_payload["tools"][0]["actions"])
+        sales_tool = next(tool for tool in catalog_payload["tools"] if tool["name"] == "merit_write_sales")
+        sales_create = next(action for action in sales_tool["actions"] if action["name"] == "sales_invoice_create")
+        assert "InvoiceRow (singular)" in sales_create["description"]
+        assert "7e170b45-fe96-4048-b824-39733c33e734" in sales_create["description"]
         assert "merit_read_master_data" in invoice_prompt.messages[0].content.text
         assert "merit_write_sales" in invoice_prompt.messages[0].content.text
+        assert "InvoiceNo" in invoice_prompt.messages[0].content.text
+        assert "YYYYMMDD" in invoice_prompt.messages[0].content.text
         assert "merit_write_customers" in customer_prompt.messages[0].content.text
 
     asyncio.run(scenario())

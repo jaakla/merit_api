@@ -91,7 +91,12 @@ class Items(Namespace):
 
 class Sales(Namespace):
     def get_invoices(self, **kwargs) -> List[Dict]:
-        """Get list of invoices. PeriodStart/PeriodEnd (YYYYmmdd) default to last 3 months if omitted."""
+        """Get list of invoices.
+
+        PeriodStart/PeriodEnd (YYYYMMDD) default to last 3 months if omitted.
+        This is the safest way to find the latest sales InvoiceNo before creating the
+        next invoice; ``send_invoice`` requires an explicit invoice number.
+        """
         return self._client._post("getinvoices", self._apply_default_period(kwargs), version="v2")
 
     def get_invoice(self, id: str, add_attachment: bool = False) -> Dict:
@@ -101,21 +106,39 @@ class Sales(Namespace):
     def send_invoice(self, invoice: Dict[str, Any]) -> Dict:
         """Create a sales invoice.
 
-        Tricky requirements:
-        - Customer: ``{"Id": guid}`` for an existing customer, or provide Name + RegNo + CountryCode
-          to create a new one on the fly.
-        - InvoiceRow.Item: required nested object — Description and UOMName live here.
-        - InvoiceRow.TaxId: required on every row (use ``taxes.get_list()`` to find valid IDs).
-        - TaxAmount: required array of ``{TaxId, Amount}`` — one entry per distinct tax rate.
-        - Dates (DocDate, DueDate): YYYYmmdd strings.
-        - InvoiceNo: optional — Merit auto-assigns the next number if omitted.
+        This posts the payload directly to Merit v1 ``sendinvoice``. The create
+        payload is not the same shape as ``get_invoice`` responses; do not copy a
+        GET response or rename ``Lines`` to ``InvoiceRows``.
 
-        Minimal working example (20 % VAT)::
+        Important requirements:
+        - Use ``InvoiceRow`` (singular), not ``InvoiceRows``.
+        - ``InvoiceNo`` is mandatory; Merit does not auto-assign it. Call
+          ``get_invoices`` first and choose the next sequential number.
+        - ``DocDate``, ``TransactionDate`` and ``DueDate`` are YYYYMMDD strings.
+        - ``Customer`` should contain ``{"Id": guid}`` for an existing customer.
+        - ``InvoiceRow[].Item`` is required; ``Description`` and ``UOMName`` live
+          inside ``Item``.
+        - ``InvoiceRow[].TaxId`` is the tax GUID. Use ``taxes.get_list()`` to find
+          valid IDs; do not send TaxName or TaxPct.
+        - ``InvoiceRow[].Account`` is the account number field; do not use
+          AccountCode for sales invoice rows.
+        - ``TaxAmount`` is required even when the amount is zero.
+        - ``TotalAmount`` is required at top level and should match the row
+          ``Price * Quantity`` total.
+        - ``FComment`` is an optional footer note.
+        - Do not set ``DelivNote``/``delivnote`` true when creating a draft invoice;
+          delivery is a separate manual step in Merit.
+
+        Minimal working example (0 % VAT)::
 
             result = client.sales.send_invoice({
                 "Customer": {"Id": "<customer-guid>"},
                 "DocDate": "20260415",
+                "TransactionDate": "20260415",
                 "DueDate": "20260429",
+                "InvoiceNo": "21179",
+                "CurrencyCode": "EUR",
+                "PriceInclVat": False,
                 "InvoiceRow": [
                     {
                         "Item": {
@@ -126,10 +149,11 @@ class Sales(Namespace):
                         "Quantity": 1.0,
                         "Price": 100.00,
                         "TaxId": "<tax-guid>",
+                        "Account": "30001",
                     }
                 ],
-                "TaxAmount": [{"TaxId": "<tax-guid>", "Amount": 20.00}],
-                "TotalAmount": 120.00,
+                "TaxAmount": [{"TaxId": "<tax-guid>", "Amount": 0.00}],
+                "TotalAmount": 100.00,
             })
             # Returns: {"CustomerId": "...", "InvoiceId": "...", "InvoiceNo": "...", "RefNo": "..."}
         """
@@ -144,18 +168,27 @@ class Sales(Namespace):
 
         Uses the same ``sendinvoice`` endpoint with negative Quantity / Price / TotalAmount.
         Provide the original invoice's customer and rows with negated quantities/prices.
+        The same create-payload requirements apply as in ``send_invoice``: singular
+        ``InvoiceRow``, explicit ``InvoiceNo``, YYYYMMDD dates, row-level ``TaxId``,
+        ``Account``, ``TaxAmount`` and top-level ``TotalAmount``.
 
         Example::
 
             result = client.sales.send_credit_invoice({
                 "Customer": {"Id": "<customer-guid>"},
                 "DocDate": "20260415",
+                "TransactionDate": "20260415",
+                "DueDate": "20260415",
+                "InvoiceNo": "21180",
+                "CurrencyCode": "EUR",
+                "PriceInclVat": False,
                 "InvoiceRow": [
                     {
                         "Item": {"Code": "SVC01", "Description": "Credit: Consulting", "UOMName": "tk"},
                         "Quantity": -1.0,
                         "Price": 100.00,
                         "TaxId": "<tax-guid>",
+                        "Account": "30001",
                     }
                 ],
                 "TaxAmount": [{"TaxId": "<tax-guid>", "Amount": -20.00}],
@@ -166,6 +199,11 @@ class Sales(Namespace):
 
     def send_invoice_by_email(self, id: str, delivnote: bool = False) -> Dict:
         """Send a sales invoice by email to the customer.
+
+        This delivers the invoice. Do not call it as part of the normal draft
+        creation flow unless the user explicitly wants delivery from the API.
+        Keep ``delivnote`` false unless delivery note mode without prices is
+        explicitly required.
         
         Args:
             id: Sales invoice GUID (SIHId)
@@ -183,6 +221,11 @@ class Sales(Namespace):
     def send_invoice_by_einvoice(self, id: str, delivnote: bool = False) -> Dict:
         """Send a sales invoice as a structured e-invoice.
 
+        This delivers the invoice. Do not call it as part of the normal draft
+        creation flow unless the user explicitly wants delivery from the API.
+        Keep ``delivnote`` false unless delivery note mode without prices is
+        explicitly required.
+        
         Args:
             id: Sales invoice GUID (SIHId)
             delivnote: If True, send invoice without prices (delivery note mode)
