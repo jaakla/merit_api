@@ -40,7 +40,7 @@ class Customers(Namespace):
 
     def send(self, customer: Dict[str, Any]) -> Dict:
         """Create or update a customer."""
-        return self._client._post("sendcustomer", customer)
+        return self._client._post("sendcustomer", customer, version="v2")
 
 
 class Vendors(Namespace):

@@ -351,7 +351,7 @@ def test_connected_mode_write_customers_routes_customer_upsert():
         )
 
         assert result.structured_content == {"Id": "cust-1"}
-        assert session.post.call_args.args[0].endswith("/v1/sendcustomer")
+        assert session.post.call_args.args[0].endswith("/v2/sendcustomer")
 
     asyncio.run(scenario())
 

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `customers.send` (customer_upsert) now targets `/api/v2/sendcustomer` instead of the
+  non-existent `/api/v1/sendcustomer`, which was returning 404 and blocking customer
+  creation through the MCP `merit_write_customers` tool.
+
 ### Added
 
 #### Priority 1: Critical Sales Invoice Delivery Methods
