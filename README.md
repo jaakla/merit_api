@@ -6,7 +6,7 @@ MCP server ja Pythoni SDK Merit Aktiva REST API jaoks. MCP server eksponeerib pr
 
 ## Vastutusest loobumine
 
-**See on eksperimentaalne ja mitteametlik projekt.** See ei ole seotud Merit Aktivaga, selle poolt toetatud ega ametlikult kinnitatud.
+**See on eksperimentaalne ja mitteametlik projekt.** See ei ole seotud AS Merit Tarkvaraga, ei ole nende poolt toetatud ega ametlikult kinnitatud.
 
 **Kasutad seda täielikult omal vastutusel.** See tarkvara saab lugeda ja muuta live-raamatupidamisandmeid, sh kliente, hankijaid, artikleid, arveid, makseid, makse ja dimensioone. Autorid ei vastuta vigaste kannete, kustutatud kirjete ega muu kaudse kahju eest.
 
@@ -23,15 +23,15 @@ Seda tarkvara kasutades nõustud, et:
 
 npm-pakett eemaldab vajaduse Pythoni sõltuvusi käsitsi paigaldada, kuid server ise on kirjutatud Pythonis, seega on lokaalne Python interpreter siiski vajalik.
 
-## API mandaadid
+## Kasutaja API võtmed
 
-Server kasutab järgmisi keskkonnamuutujaid:
+Server vajab järgmisi võtmeid, mille saab Meriti Aktivast Ettevõtte andmete > API Seadistustes, vajalik **piisav kasutaja õiguste tase (haldaja) ja pakett (Premium või parem)**:
 
 - `MERIT_API_ID`
 - `MERIT_API_KEY`
 - `MERIT_API_COUNTRY` on valikuline, `EE` või `PL`, vaikimisi `EE`
 
-Näide:
+Käsurea-vahendites saab need panna keskkonda (environment variables):
 
 ```bash
 export MERIT_API_ID=your-api-id
@@ -39,26 +39,20 @@ export MERIT_API_KEY=your-api-key
 export MERIT_API_COUNTRY=EE
 ```
 
-Kui `MERIT_API_ID` või `MERIT_API_KEY` puudub, käivitub server seadistusrežiimis (aga mitte igas kliendis). Seadistusrežiimis:
+Kui `MERIT_API_ID` või `MERIT_API_KEY` puudub, võib käivituda server seadistusrežiimis, aga kindlam on need seadistada json failis nagu kirjas allpool. Seadistusrežiimis:
 
 - `get_setup_instructions` jääb kättesaadavaks
-- avastusressursid jäävad kättesaadavaks
+- ressursid jäävad kättesaadavaks
 - promptid jäävad kättesaadavaks
 - API-põhised tööriistad tagastavad seadistusjuhise ega kutsu Merit API-t
 
-## Seadistus
+## Paigaldus ja seadistus
 
 ### 1. Lisa MCP server
 
-Enamik AI assistente oskab selle sinu eest seadistada. Käsureal:
+Server töötab kasutaja arvutis oleva skriptina, mis ühendub otse Meriti teenusega. Kolmandat osapoolt ei ole ja kusagile mujale andmeid ei saadeta.
 
-```bash
-npx -y merit-unofficial-mcp
-```
-
-Kui eelistad käsitsi seadistada:
-
-**Claude Code:**
+**Claude Code:** (käsurealt)
 
 ```bash
 claude mcp add merit-api -- npx -y merit-unofficial-mcp
@@ -74,12 +68,19 @@ claude mcp add merit-api -- npx -y merit-unofficial-mcp
       "args": ["-y", "merit-unofficial-mcp"],
       "env": {
         "MERIT_API_ID": "your-api-id-here",
-        "MERIT_API_KEY": "your-api-key-here"
+        "MERIT_API_KEY": "your-api-key-here",
+        "MERIT_API_COUNTRY": "EE"
       }
     }
   }
 }
 ```
+
+Seadistusfail Claude Desktop-is:
+
+* macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+* Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+* Linux: `~/.config/Claude/claude_desktop_config.json`
 
 **Codex CLI** TOML-konfiguratsiooniga:
 
@@ -89,7 +90,7 @@ command = "npx"
 args = ["-y", "merit-unofficial-mcp"]
 ```
 
-npm wrapper loob automaatselt privaatse virtualenv-i, paigaldab sinna vajalikud Pythoni moodulid ja käivitab MCP serveri. 
+npm wrapper npx paigaldab vajalikud Pythoni moodulid ja käivitab MCP serveri. 
 
 <details>
 <summary>Tööriistade konfiguratsioonifailide asukohad</summary>
@@ -105,15 +106,7 @@ npm wrapper loob automaatselt privaatse virtualenv-i, paigaldab sinna vajalikud 
 
 </details>
 
-### 2. Käsitsi Pythonist käivitamine
-
-Kui töötad otse Pythoni keskkonnast ega kasuta `npx`, saab MCP serveri käivitada ka nii (eelduseks on vajalike moodulite paigaldus, soovitatavalt venv vms abil):
-
-```bash
-python3 -m merit_api_mcp
-```
-
-### 3. Käivitamine lähtekoodist
+### 2. Käivitamine lähtekoodist (arenduseks)
 
 ```bash
 git clone https://github.com/jaakla/merit_api.git
@@ -123,9 +116,9 @@ pip install -e ./mcp
 python3 -m merit_api_mcp
 ```
 
-## Töövood (MCP promptid)
+## MCP promptid
 
-Server sisaldab praegu 3 sisseehitatud prompti:
+Server sisaldab kolme lihtsat näidisprompti, kuid kasutada saab ka mistahes teistsuguseid, keerukamaid käske:
 
 | Prompt | Kirjeldus |
 |---|---|
@@ -142,7 +135,7 @@ Server sisaldab praegu 3 sisseehitatud prompti:
 
 ## Tööriistad (tools)
 
-MCP server pakub üldistatud domeenipõhist töötiistade komplekti, et vältida liiga pikka nimekirja käskudest. Üldine tööriist kasutab `action` välja, et valida konkreetne Merit'i workflow.
+Merit võimaldab kümneid erinevaid käske, see MCP server koondab need üldistatud tööriistadeks, et vältida liiga pikka nimekirja käskudest. Üldine tööriist kasutab `action` välja, et valida konkreetne Merit'i workflow.
 
 Lugemise, Read-only tööriistad:
 
@@ -162,30 +155,33 @@ Muutmise/kirjutamise tööriistad toimivad kahe käsuna, et vältida vigaste and
 
 Kirjutavad tööriistad on kahe sammuga. Esimene `merit_write_*` kutse ei tee Merit'is muudatusi: see tagastab eelvaate, `confirmation_tool` nime ja unikaalse `confirmation_code` väärtuse. Pärast eelvaate ülevaatamist tuleb sama action'i ja samade argumentidega kutsuda vastavat `*_confirm` tööriista ning anda kaasa `confirmation_code` ja `confirmed=true`. Kood on seotud konkreetsete argumentidega ja seda ei saa kasutada teise muudatuse kinnitamiseks.
 
+**NB! mõned AI mudelid püüavad olla "abivalmid" ja proovivad teha *_confirm* käsku automaatselt ise. Ole tähelepanelik, enne kui vajutad "Allow".**
+
 Kõigi tööriistade täielik action-kataloog on ressursis `merit://tools/catalog`.
 
 ## Kasutusnäited
 
-Kui MCP server on ühendatud, saad AI assistendiga suhelda loomulikus keeles.
+Kui MCP server on ühendatud, saad AI assistendiga suhelda eesti, inglise (tegelikult enamvähem mistahes) keeles.
 
 ### Uuri põhiandmeid
 
 > "Näita kliente, mis vastavad nimele Acme"
 
-Assistant peaks kasutama `merit_read_master_data` tööriista action'iga `customers_list` ja `filters={"Name": "Acme"}`.
+Töövahend peaks kasutama `merit_read_master_data` tööriista action'iga `customers_list` ja `filters={"Name": "Acme"}`.
 
 ### Loo või uuenda kliendi andmeid
 
 > "Loo uus klient Example OÜ"
 
-Assistant peaks koostama kliendi payloadi ja kutsuma `merit_write_customers` tööriista action'iga `customer_upsert`.
-See tagastab ainult eelvaate. Muudatus jõustub alles siis, kui assistant kutsub samade andmetega `merit_write_customers_confirm`, lisab eelvaatest saadud `confirmation_code` väärtuse ja seab `confirmed=true`. Merit nõuab teatud (ja kahjuks mitte dokumenteeritud) minimaalset komplekti andmeid, aga paremad AI mudelid oskab neid juurde otsida, küsida ja ka mitu korda erinevalt andmeid proovida, kuni toimib. 
+Töövahend peaks koostama kliendi andmete faili ja kutsuma `merit_write_customers` tööriista action'iga `customer_upsert`.
+
+**Merit nõuab teatud (ja kahjuks mitte dokumenteeritud) minimaalset komplekti andmeid, seega esimene katse võib ebaõnnestuda. Siiski paremad AI mudelid oskavad neid automaatselt juurde otsida veebist, küsida kasutajalt ja ka mitu korda erinevalt andmeid proovida, kuni toimib.**
 
 ### Loo müügiarve
 
 > "Loo kliendile Acme müügiarve aprilli konsultatsiooniteenuse eest"
 
-Assistant saab kasutada `merit_read_master_data` action'iga `customers_list`, vajadusel `find-or-create-customer`, ja seejärel `merit_write_sales` action'iga `sales_invoice_create`.
+Töövahend saab kasutada `merit_read_master_data` action'iga `customers_list`, vajadusel `find-or-create-customer`, ja seejärel `merit_write_sales` action'iga `sales_invoice_create`.
 `merit_write_sales` tagastab eelvaate; arve luuakse alles `merit_write_sales_confirm` kutsega, kui kasutaja on eelvaate üle vaadanud.
 
 ### Uuri sisestatud andmeid
@@ -196,13 +192,13 @@ Assistant saab kasutada `merit_read_master_data` tööriista action'eid `banks_l
 
 ### Kontrolli seadistuse seisu
 
-> "Kontrolli, kas Merit MCP server on õigesti seadistatud"
+> "Kontrolli, kas Merit MCP server on õigesti seadistatud ja saan Meritiga ühenduda"
 
 Assistant saab kasutada `get_setup_instructions` ja `merit://server/info`.
 
 ## SDK kasutamine
 
-See repository sisaldab ka eraldi Pythoni SDK projekti kataloogis [merit_api/](/Users/jaak/mygit/merit_api/merit_api).
+See repository sisaldab ka eraldi avatud koodiga Pythoni SDK projekti kataloogis [merit_api/](/Users/jaak/mygit/merit_api/merit_api). Siit saad kontrollida, mida täpselt tarkvara teeb, ja arendusoskuse korral pakkuda välja koodiparandusi ja -täiendusi.
 
 Näide:
 
@@ -224,7 +220,7 @@ SDK sisaldab praegu:
 - seadistatavat timeouti ja retry käitumist
 - request/response logger hooke koos saladuste redaktsiooniga
 - valikulist idempotency headeri genereerimist
-- API taseme ärivea parsimist HTTP 200 vastustest
+- API taseme vigade haldust, eristust HTTP 200 vastustest
 
 ## Uuendamine
 
@@ -232,7 +228,7 @@ Uuendamise viis sõltub sellest, kuidas serverit käivitad.
 
 ### Kui kasutad `npx`
 
-Kui sinu MCP konfiguratsioon kasutab `npx -y merit-unofficial-mcp`, piisab tavaliselt MCP serveri taaskäivitamisest või uuesti laadimisest. Järgmisel käivitamisel tõmbab `npx` viimase avaldatud versiooni.
+Kui sinu MCP konfiguratsioon kasutab `npx -y merit-unofficial-mcp`, piisab tavaliselt AI töövahendi (nt Claude Desktop) taaskäivitamisest. Järgmisel käivitamisel tõmbab `npx` viimase avaldatud versiooni.
 
 Kui klient jääb kasutama vanemat cache'itud versiooni, sunni ühe korra värskendus:
 
@@ -240,9 +236,9 @@ Kui klient jääb kasutama vanemat cache'itud versiooni, sunni ühe korra värsk
 npx -y merit-unofficial-mcp@latest
 ```
 
-Seejärel taaskäivita MCP server oma kliendis.
+Seejärel taaskäivita oma AI töövahend oma kliendis, see taaskäivitab ise lokaalse MCP serveri
 
-### Kui jooksutad lokaalsest checkout'ist
+### Kui jooksutad algkoodist, lokaalsest GIT checkout'ist
 
 ```bash
 git pull
@@ -250,14 +246,14 @@ pip install -e ./merit_api
 pip install -e ./mcp
 ```
 
-Seejärel taaskäivita MCP server oma kliendis.
+Seejärel taaskäivita oma AI töövahend.
 
 ## Arendus
 
 See repository on jaotatud eraldi alamprojektideks:
 
-- [merit_api/](/Users/jaak/mygit/merit_api/merit_api) SDK jaoks
-- [mcp/](/Users/jaak/mygit/merit_api/mcp) Pythoni MCP serveri jaoks
+- [merit_api/](merit_api/merit_api) SDK jaoks
+- [mcp/](merit_api/mcp) Pythoni MCP serveri jaoks
 - root `package.json` npm wrapperi jaoks
 
 SDK testid:
@@ -288,13 +284,13 @@ MERIT_API_INTEGRATION_TEST=true python3 -m pytest -q
 ```
 
 ## Hea teada
-- Kasuta tipptasemel LLM mudeleid, kuigi need on pisut kallimad : Pro, Opus tase, **mitte** Light, mini või Haiku tase. 
-- Praegune MCP server toetab ainult ühte ühendust korraga, ühe ettevõttega tööd
-- Audit logi püsisalvestust veel ei ole
-- Dry-run kirjutusvooge veel ei ole (aga kirjutus käib läbi kontrolli, see peaks asendama dry-run enamuse juhtudel)
-- Dokumentide ingest'i või OCR töövookihti veel ei ole - nt ostuarvete sisestuseks kasuta muud AI tööriista või mudelit mis teeb selle tekstiks. 
-- Juure npm-pakett on launcher-wrapper; päris Pythoni projektid asuvad `merit_api/` ja `mcp/`
 
-## Litsents
+- Kasuta **tipptasemel AI/LLM mudeleid**, kuigi need on pisut kallimad : **Opus**/**Pro** tase, ja **mitte** Light, mini või Haiku tase. 
+- Praegune MCP server toetab ainult ühte ühendust korraga, ehk siis ühe ettevõttega tööd. Kui sa oled raamatupidamisfirma, kes soovib selle tasuta ja garaantiita koodi ning AI abil kõikide oma klientide raamatupidamist automaatselt hallata, siis olgu Jumala arm sinuga (loe: ei ole hea mõte). 
+- Auditeerimiseks logi püsisalvestust ei ole
+- Dry-run kirjutusvooge veel ei ole — aga kirjutus käib läbi kontrolli, see peaks asendama dry-run enamuse juhtudel
+- Dokumentide sisestust mis nõuaks OCR töövoogu veel ei ole - nt ostuarvete sisestuseks kasuta muud AI tööriista või -mudelit, mis teeb selle tekstiks. PDF faili saab manusega ostuarvele lisada küll.
+
+## Litsents - tasuta, omal vastutusel
 
 [MIT](LICENSE)
