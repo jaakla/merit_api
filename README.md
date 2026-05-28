@@ -1,6 +1,10 @@
 # Merit Unofficial MCP Server
 
-MCP server ja Pythoni SDK Merit Aktiva REST API jaoks. MCP server eksponeerib praegu 29 tööriista, 3 töövoo prompti ja 2 ressurssi. See on mõeldud töötama MCP klientidega nagu Claude Code, Codex CLI, Cursor, Windsurf, Cline, Gemini CLI ja sarnased tööriistad.
+> **English summary:** Unofficial MCP server and Python SDK for the [Merit Aktiva](https://aktiva.merit.ee) accounting REST API. Exposes 32 tools, 3 workflow prompts, and 2 resources to AI coding assistants (Claude Code, Cursor, Windsurf, Gemini CLI, etc.), letting you read and write accounting data — customers, invoices, payments, taxes, and more — through natural-language prompts. Write operations use a two-step preview/confirm flow to prevent accidental changes. Requires a Merit Aktiva Premium account and API credentials (`MERIT_API_ID`, `MERIT_API_KEY`). Run/install instantly via `uvx`. **Experimental and unofficial — use at your own risk.**
+
+---
+
+MCP server ja Pythoni SDK Merit Aktiva REST API jaoks. MCP server eksponeerib praegu 32 tööriista, 3 töövoo prompti ja 2 ressurssi. See on mõeldud töötama MCP klientidega nagu Claude Code, Codex CLI, Cursor, Windsurf, Cline, Gemini CLI ja sarnased tööriistad.
 
 > **Aktiivne arendus.** See projekt areneb endiselt. MCP kiht on kasutatav, kuid see ei ole veel täisfunktsionaalne raamatupidamise töövoosüsteem. Kontrolli iga kirjutava operatsiooni tulemust live-raamatupidamisandmete vastu enne selle usaldamist.
 
@@ -15,13 +19,6 @@ Seda tarkvara kasutades nõustud, et:
 - vastutad ise kõigi loodud või muudetud raamatupidamisandmete kontrollimise eest
 - peaksid enne tähtsate live-andmete vastu kasutamist põhjalikult testima
 - tegemist on eksperimentaalse tarkvaraga ilma igasuguse garantiita
-
-## Eeltingimused
-
-- Node.js 18+ `npx` wrapperi jaoks
-- Python 3.10+ peab olema masinas olemas
-
-npm-pakett eemaldab vajaduse Pythoni sõltuvusi käsitsi paigaldada, kuid server ise on kirjutatud Pythonis, seega on lokaalne Python interpreter siiski vajalik.
 
 ## Kasutaja API võtmed
 
@@ -48,24 +45,32 @@ Kui `MERIT_API_ID` või `MERIT_API_KEY` puudub, võib käivituda server seadistu
 
 ## Paigaldus ja seadistus
 
+### Eeltingimused
+
+* Arvutisse peab olema paigaldatud [uv](https://docs.astral.sh/uv/) — kaasaegne ja kiire Pythoni pakihaldur.
+
 ### 1. Lisa MCP server
 
-Server töötab kasutaja arvutis oleva skriptina, mis ühendub otse Meriti teenusega. Kolmandat osapoolt ei ole ja kusagile mujale andmeid ei saadeta.
+Server käivitatakse lokaalselt taustal ja ühendub otse Meriti pilveteenusega. Kolmandaid osapooli ei kaasata.
 
 **Claude Code:** (käsurealt)
 
 ```bash
-claude mcp add merit-api -- npx -y merit-unofficial-mcp
+claude mcp add merit-api -- uvx --from git+https://github.com/jaakla/merit_api.git#subdirectory=mcp merit-unofficial-mcp
 ```
 
-**Teised tööriistad** JSON-konfiguratsiooniga:
+**Teised tööriistad** JSON-konfiguratsiooniga (nt. Claude Desktop, Cursor, Cline):
 
 ```json
 {
   "mcpServers": {
     "merit-api": {
-      "command": "npx",
-      "args": ["-y", "merit-unofficial-mcp"],
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/jaakla/merit_api.git#subdirectory=mcp",
+        "merit-unofficial-mcp"
+      ],
       "env": {
         "MERIT_API_ID": "your-api-id-here",
         "MERIT_API_KEY": "your-api-key-here",
@@ -76,21 +81,15 @@ claude mcp add merit-api -- npx -y merit-unofficial-mcp
 }
 ```
 
-Seadistusfail Claude Desktop-is:
-
-* macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-* Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-* Linux: `~/.config/Claude/claude_desktop_config.json`
-
 **Codex CLI** TOML-konfiguratsiooniga:
 
 ```toml
 [mcp_servers.merit-api]
-command = "npx"
-args = ["-y", "merit-unofficial-mcp"]
+command = "uvx"
+args = ["--from", "git+https://github.com/jaakla/merit_api.git#subdirectory=mcp", "merit-unofficial-mcp"]
 ```
 
-npm wrapper npx paigaldab vajalikud Pythoni moodulid ja käivitab MCP serveri. 
+`uvx` tõmbab ja käivitab serveri otse Git repositooriumist, tagades et alati on olemas vajalikud Pythoni moodulid ilma masinat risustamata.
 
 <details>
 <summary>Tööriistade konfiguratsioonifailide asukohad</summary>
@@ -108,12 +107,13 @@ npm wrapper npx paigaldab vajalikud Pythoni moodulid ja käivitab MCP serveri.
 
 ### 2. Käivitamine lähtekoodist (arenduseks)
 
+Kui soovite serverit lokaalselt muuta või testida, kloonige repositoorium ja käivitage see uv workspace toel:
+
 ```bash
 git clone https://github.com/jaakla/merit_api.git
 cd merit_api
-pip install -e ./merit_api
-pip install -e ./mcp
-python3 -m merit_api_mcp
+# Käivita MCP server otse lokaalsest koodist
+uv run --package merit-unofficial-mcp-server merit-unofficial-mcp
 ```
 
 ## MCP promptid
@@ -226,61 +226,50 @@ SDK sisaldab praegu:
 
 Uuendamise viis sõltub sellest, kuidas serverit käivitad.
 
-### Kui kasutad `npx`
+### Kui kasutad `uvx`
 
-Kui sinu MCP konfiguratsioon kasutab `npx -y merit-unofficial-mcp`, piisab tavaliselt AI töövahendi (nt Claude Desktop) taaskäivitamisest. Järgmisel käivitamisel tõmbab `npx` viimase avaldatud versiooni.
-
-Kui klient jääb kasutama vanemat cache'itud versiooni, sunni ühe korra värskendus:
+`uvx` puhhordab allalaaditud pakette automaatselt vahemällu. Kui soovid kindel olla, et laaditakse alla uusim versioon repositooriumist, tühjenda vahemälu:
 
 ```bash
-npx -y merit-unofficial-mcp@latest
+uv cache clean merit-unofficial-mcp-server
 ```
 
-Seejärel taaskäivita oma AI töövahend oma kliendis, see taaskäivitab ise lokaalse MCP serveri
+Seejärel taaskäivita oma AI töövahend, mis käivitab MCP serveri uuesti.
 
 ### Kui jooksutad algkoodist, lokaalsest GIT checkout'ist
 
 ```bash
 git pull
-pip install -e ./merit_api
-pip install -e ./mcp
+# Kuna kasutusel on uv workspace, siis uv sync teeb kõik automaatselt korda:
+uv sync
 ```
 
 Seejärel taaskäivita oma AI töövahend.
 
 ## Arendus
 
-See repository on jaotatud eraldi alamprojektideks:
+Repositoorium on jaotatud ühisesse `uv` workspace'i kuuluvateks alamprojektideks:
 
-- [merit_api/](merit_api/merit_api) SDK jaoks
-- [mcp/](merit_api/mcp) Pythoni MCP serveri jaoks
-- root `package.json` npm wrapperi jaoks
+- [merit_api/](merit_api/merit_api) SDK jaoks (pakett: `merit-api`)
+- [mcp/](merit_api/mcp) Pythoni MCP serveri jaoks (pakett: `merit-unofficial-mcp-server`)
+- root `pyproject.toml` workspace seadete jaoks
 
 SDK testid:
 
 ```bash
-cd merit_api
-python3 -m pytest -q
+uv run --package merit-api pytest
 ```
 
 MCP testid:
 
 ```bash
-cd mcp
-python3 -m pytest -q
-```
-
-Kontrolli npm wrapperi tarballi:
-
-```bash
-npm pack --dry-run
+uv run --package merit-unofficial-mcp-server pytest
 ```
 
 SDK live integratsioonitestid on opt-in:
 
 ```bash
-cd merit_api
-MERIT_API_INTEGRATION_TEST=true python3 -m pytest -q
+MERIT_API_INTEGRATION_TEST=true uv run --package merit-api pytest
 ```
 
 ## Hea teada

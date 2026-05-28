@@ -18,7 +18,8 @@ dependencies = [
 ]
 
 [project.scripts]
-merit-unofficial-mcp-python = "merit_api_mcp.server:main"
+merit-unofficial-mcp-server = "merit_api_mcp.server:main"
+merit-unofficial-mcp = "merit_api_mcp.server:main"
 
 [project.optional-dependencies]
 dev = [
@@ -27,3 +28,7 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/merit_api_mcp"]
+
+[tool.uv.sources]
+merit-api = { workspace = true }
+
