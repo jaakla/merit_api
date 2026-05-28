@@ -1,0 +1,18 @@
+{
+  "name": "merit-unofficial-mcp",
+  "version": "0.5.0",
+  "description": "DEPRECATED: MCP server for the Merit Aktiva REST API. Migrated to native uv/uvx.",
+  "homepage": "https://github.com/jaakla/merit_api#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaakla/merit_api.git"
+  },
+  "bin": {
+    "merit-unofficial-mcp": "bin/merit-unofficial-mcp.js"
+  },
+  "files": [
+    "bin/merit-unofficial-mcp.js",
+    "README.md"
+  ],
+  "license": "MIT"
+}
