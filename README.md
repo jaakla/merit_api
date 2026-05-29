@@ -56,7 +56,7 @@ Server käivitatakse lokaalselt taustal ja ühendub otse Meriti pilveteenusega. 
 **Claude Code:** (käsurealt)
 
 ```bash
-claude mcp add merit-api -- uvx --from git+https://github.com/jaakla/merit_api.git#subdirectory=mcp merit-unofficial-mcp
+claude mcp add merit-api -- uvx merit-unofficial-mcp-server
 ```
 
 **Teised tööriistad** JSON-konfiguratsiooniga (nt. Claude Desktop, Cursor, Cline):
@@ -66,11 +66,7 @@ claude mcp add merit-api -- uvx --from git+https://github.com/jaakla/merit_api.g
   "mcpServers": {
     "merit-api": {
       "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/jaakla/merit_api.git#subdirectory=mcp",
-        "merit-unofficial-mcp"
-      ],
+      "args": ["merit-unofficial-mcp-server"],
       "env": {
         "MERIT_API_ID": "your-api-id-here",
         "MERIT_API_KEY": "your-api-key-here",
@@ -81,15 +77,21 @@ claude mcp add merit-api -- uvx --from git+https://github.com/jaakla/merit_api.g
 }
 ```
 
+Seadistusfail Claude Desktop-is:
+
+* macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+* Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+* Linux: `~/.config/Claude/claude_desktop_config.json`
+
 **Codex CLI** TOML-konfiguratsiooniga:
 
 ```toml
 [mcp_servers.merit-api]
 command = "uvx"
-args = ["--from", "git+https://github.com/jaakla/merit_api.git#subdirectory=mcp", "merit-unofficial-mcp"]
+args = ["merit-unofficial-mcp-server"]
 ```
 
-`uvx` tõmbab ja käivitab serveri otse Git repositooriumist, tagades et alati on olemas vajalikud Pythoni moodulid ilma masinat risustamata.
+`uvx` tõmbab ja käivitab serveri otse PyPI registrist, tagades et alati on olemas vajalikud Pythoni moodulid ilma masinat risustamata.
 
 <details>
 <summary>Tööriistade konfiguratsioonifailide asukohad</summary>
@@ -112,6 +114,8 @@ Kui soovite serverit lokaalselt muuta või testida, kloonige repositoorium ja k�
 ```bash
 git clone https://github.com/jaakla/merit_api.git
 cd merit_api
+# Paigalda lokaalsed sõltuvused (sh pytest arendustestide jaoks)
+uv sync --all-extras
 # Käivita MCP server otse lokaalsest koodist
 uv run --package merit-unofficial-mcp-server merit-unofficial-mcp
 ```
@@ -228,13 +232,13 @@ Uuendamise viis sõltub sellest, kuidas serverit käivitad.
 
 ### Kui kasutad `uvx`
 
-`uvx` puhhordab allalaaditud pakette automaatselt vahemällu. Kui soovid kindel olla, et laaditakse alla uusim versioon repositooriumist, tühjenda vahemälu:
+Kuna server on avaldatud PyPI-s, laadib `uvx` automaatselt alla uusima versiooni. Kui soovite olemasolevat paigaldust käsitsi viimasele versioonile uuendada, käivitage:
 
 ```bash
-uv cache clean merit-unofficial-mcp-server
+uvx --upgrade merit-unofficial-mcp-server
 ```
 
-Seejärel taaskäivita oma AI töövahend, mis käivitab MCP serveri uuesti.
+Seejärel taaskäivita oma AI töövahend.
 
 ### Kui jooksutad algkoodist, lokaalsest GIT checkout'ist
 
