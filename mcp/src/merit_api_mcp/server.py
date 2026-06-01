@@ -6,7 +6,12 @@ from mcp.types import ToolAnnotations
 
 from merit_api import MeritAPI
 
-from .config import MeritMCPConfig, build_setup_payload, load_config_from_env
+from .config import (
+    MeritMCPConfig,
+    build_configured_payload,
+    build_setup_payload,
+    load_config_from_env,
+)
 from .prompts import register_prompts
 from .registry import build_tool_handler, get_tool_specs
 from .resources import register_resources
@@ -51,11 +56,16 @@ def build_mcp_server(
     @mcp.tool(
         name="get_setup_instructions",
         title="Get Setup Instructions",
-        description="Explain how to configure MERIT_API_ID and MERIT_API_KEY for this MCP server.",
+        description=(
+            "Report whether MERIT_API_ID and MERIT_API_KEY are configured, and explain how to "
+            "set them when they are not."
+        ),
         annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
     )
     def get_setup_instructions() -> dict:
-        return build_setup_payload()
+        if setup_mode:
+            return build_setup_payload()
+        return build_configured_payload(resolved_config)
 
     def current_client() -> Any:
         return client

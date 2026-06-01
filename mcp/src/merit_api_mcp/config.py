@@ -54,3 +54,16 @@ def build_setup_payload(
     if blocked_api_method:
         payload["blocked_api_method"] = blocked_api_method
     return payload
+
+
+def build_configured_payload(config: MeritMCPConfig) -> dict:
+    return {
+        "mode": "configured",
+        "message": (
+            "Merit API credentials are configured. API-backed MCP tools are enabled."
+        ),
+        "credentials_present": True,
+        "country": config.country,
+        "supported_env_vars": list(SUPPORTED_ENV_VARS),
+        "supported_countries": list(SUPPORTED_COUNTRIES),
+    }

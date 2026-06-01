@@ -129,6 +129,39 @@ def test_setup_mode_returns_setup_guidance_for_all_consolidated_tools():
     asyncio.run(scenario())
 
 
+def test_get_setup_instructions_reports_setup_mode_when_credentials_missing():
+    async def scenario():
+        server = build_mcp_server(env={})
+
+        result = await server.call_tool("get_setup_instructions", {})
+
+        payload = result.structured_content
+        assert payload["mode"] == "setup"
+        assert payload["error"] == "Merit API credentials are not configured."
+        assert "MERIT_API_ID" in payload["supported_env_vars"]
+
+    asyncio.run(scenario())
+
+
+def test_get_setup_instructions_reports_configured_when_credentials_present():
+    async def scenario():
+        client = MeritAPI("api-id", "api-key", session=Mock())
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key", country="PL"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool("get_setup_instructions", {})
+
+        payload = result.structured_content
+        assert payload["mode"] == "configured"
+        assert payload["credentials_present"] is True
+        assert payload["country"] == "PL"
+        assert "error" not in payload
+
+    asyncio.run(scenario())
+
+
 def test_connected_mode_read_master_data_routes_to_sdk_method():
     async def scenario():
         session = Mock()
