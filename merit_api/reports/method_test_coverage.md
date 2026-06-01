@@ -64,7 +64,7 @@ Coverage: **6/14 (42.9%)**
 
 | Method | Endpoint | Version | Covered by tests | Evidence |
 |---|---|---|---|---|
-| `Customers.send` | `sendcustomer` | `v1` | ❌ | — |
+| `Customers.send` | `sendcustomer` | `v2` | ❌ | — |
 | `Dimensions.add` | `senddimensions` | `v2` | ❌ | — |
 | `Financial.create_payment` | `sendPaymentV` | `v1` | ✅ | test_purchase_invoice_integration.py |
 | `Items.add` | `senditems` | `v2` | ❌ | — |
