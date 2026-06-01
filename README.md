@@ -2,10 +2,10 @@
 
 [![CI](https://github.com/jaakla/merit_api/actions/workflows/ci.yml/badge.svg)](https://github.com/jaakla/merit_api/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/merit-unofficial-mcp-server.svg)](https://pypi.org/project/merit-unofficial-mcp-server/)
-[![Python](https://img.shields.io/pypi/pyversions/merit-unofficial-mcp-server.svg)](https://pypi.org/project/merit-unofficial-mcp-server/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-server-purple.svg)](https://modelcontextprotocol.io)
-[![Glama score](https://glama.ai/mcp/servers/jaakla/merit_api/badge)](https://glama.ai/mcp/servers/jaakla/merit_api/score)
+<a href="https://glama.ai/mcp/servers/jaakla/merit_api/score"><img src="https://glama.ai/mcp/servers/jaakla/merit_api/badge" alt="Glama score" width="140" /></a>
 
 > **English summary:** Unofficial MCP server and Python SDK for the [Merit Aktiva](https://aktiva.merit.ee) accounting REST API. Exposes 32 tools, 3 workflow prompts, and 2 resources to AI coding assistants (Claude Code, Cursor, Windsurf, Gemini CLI, etc.), letting you read and write accounting data — customers, invoices, payments, taxes, and more — through natural-language prompts. Write operations use a two-step preview/confirm flow to prevent accidental changes. Requires a Merit Aktiva Premium account and API credentials (`MERIT_API_ID`, `MERIT_API_KEY`). Run/install instantly via `uvx`. **Experimental and unofficial — use at your own risk.**
 
