@@ -228,9 +228,10 @@ invoices = client.sales.get_invoices(
 SDK sisaldab praegu:
 
 - deterministlikku request body serialiseerimist signeerimiseks
-- seadistatavat timeouti ja retry käitumist
+- seadistatavat timeouti ja retry käitumist (kordusi tehakse ainult idempotentsetele päringutele; muteerivaid kirjutusi nagu arve või makse loomine ei korrata, sest aegunud, kuid serveris juba kinnitatud päringu kordamine looks duplikaadi)
 - request/response logger hooke koos saladuste redaktsiooniga
-- valikulist idempotency headeri genereerimist
+- valikulist idempotency headeri genereerimist (tähelepanu: Merit API ei dedubleeri selle headeri põhjal — see ei ole duplikaadivastane garantii, vaid valmidus juhuks, kui server seda kunagi toetab)
+- ostuarvete ja maksete duplikaadikaitset: vaikimisi ei looda sama tarnija + `BillNo` ostuarvet ega sama `BillNo` + summaga makset teist korda; möödaminekuks anna `allow_duplicate=True`
 - API taseme vigade haldust, eristust HTTP 200 vastustest
 
 ## Uuendamine

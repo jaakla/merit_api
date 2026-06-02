@@ -79,7 +79,7 @@ class TestSendInvoice:
         result = client.sales.send_invoice(payload)
 
         assert result["InvoiceId"] == "inv-guid"
-        mock_post.assert_called_once_with("sendinvoice", payload)
+        mock_post.assert_called_once_with("sendinvoice", payload, idempotent=False)
 
     def test_send_invoice_new_customer_inline(self, client, mock_post):
         """Customer can be created inline by providing Name + RegNo + CountryCode."""
@@ -113,7 +113,7 @@ class TestSendInvoice:
         result = client.sales.send_invoice(payload)
 
         assert result["NewCustomer"] is True
-        mock_post.assert_called_once_with("sendinvoice", payload)
+        mock_post.assert_called_once_with("sendinvoice", payload, idempotent=False)
 
     def test_send_invoice_tax_amount_is_array(self, client, mock_post):
         """TaxAmount must be an array even for a single tax rate — not a scalar."""
@@ -163,7 +163,7 @@ class TestSendInvoice:
         client.sales.send_credit_invoice(payload)
 
         # Both send_invoice and send_credit_invoice hit the same endpoint
-        mock_post.assert_called_once_with("sendinvoice", payload)
+        mock_post.assert_called_once_with("sendinvoice", payload, idempotent=False)
         sent = mock_post.call_args[0][1]
         assert sent["TotalAmount"] < 0
         assert sent["TaxAmount"][0]["Amount"] < 0
@@ -183,6 +183,7 @@ class TestSendInvoiceByEmail:
             "sendinvoicebyemail",
             {"Id": "invoice-id-123", "DelivNote": False},
             version="v2",
+            idempotent=False,
         )
 
     def test_send_invoice_by_email_with_delivnote(self, client, mock_post):
@@ -196,6 +197,7 @@ class TestSendInvoiceByEmail:
             "sendinvoicebyemail",
             {"Id": "invoice-id-123", "DelivNote": True},
             version="v2",
+            idempotent=False,
         )
 
     def test_send_invoice_by_email_error(self, client, mock_post):
@@ -226,6 +228,7 @@ class TestSendInvoiceByEinvoice:
             "sendinvoiceaseinv",
             {"Id": "invoice-id-456", "DelivNote": False},
             version="v2",
+            idempotent=False,
         )
 
     def test_send_invoice_by_einvoice_with_delivnote(self, client, mock_post):
@@ -238,6 +241,7 @@ class TestSendInvoiceByEinvoice:
             "sendinvoiceaseinv",
             {"Id": "invoice-id-456", "DelivNote": True},
             version="v2",
+            idempotent=False,
         )
 
     def test_send_invoice_by_einvoice_no_capability(self, client, mock_post):

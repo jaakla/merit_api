@@ -193,6 +193,43 @@ def _is_blank(value: Any) -> bool:
     return value in (None, "", [])
 
 
+def _coerce_json_arg(value: Any) -> tuple[Any, str | None]:
+    """Parse object/array params that arrived as a JSON string.
+
+    Some MCP clients/bridges serialize untyped parameters to a JSON string before
+    they reach the tool, so ``payload``/``filters`` can show up as ``str`` instead of
+    a ``dict``/``list``. When that happens, parse the string here so the SDK models
+    receive the structured value they expect. Returns ``(parsed_value, error)`` where
+    ``error`` is a human-readable message when the string is not valid JSON.
+    """
+    if not isinstance(value, str):
+        return value, None
+    text = value.strip()
+    if not text:
+        return value, None
+    try:
+        return json.loads(text), None
+    except (json.JSONDecodeError, ValueError) as exc:
+        return value, f"could not be parsed as JSON: {exc}"
+
+
+def _json_parse_error(
+    *,
+    tool_name: str,
+    action: str | None,
+    allowed_actions: Sequence[str],
+    parse_errors: Sequence[str],
+) -> dict[str, Any]:
+    return {
+        "error": "ValidationError",
+        "tool": tool_name,
+        "action": action,
+        "allowed_actions": list(allowed_actions),
+        "message": "Failed to parse JSON string arguments.",
+        "json_errors": list(parse_errors),
+    }
+
+
 def _validate_yyyymmdd(payload: dict[str, Any], field_name: str) -> str | None:
     value = payload.get(field_name)
     if isinstance(value, str) and len(value) == 8 and value.isdigit():
@@ -684,12 +721,15 @@ def get_tool_specs() -> Sequence[ToolSpec]:
 
 
 def _build_signature(_spec: ToolSpec) -> Signature:
-    dict_type = dict[str, Any]
-    payload_type = dict[str, Any] | list[dict[str, Any]]
+    # ``str`` is included so that MCP clients/bridges that serialize untyped object
+    # params to a JSON string still pass the FastMCP/pydantic boundary; the handler
+    # parses the string back into a dict/list via ``_coerce_json_arg``.
+    filters_type = dict[str, Any] | str
+    payload_type = dict[str, Any] | list[dict[str, Any]] | str
     parameters = [
         Parameter("action", kind=Parameter.POSITIONAL_OR_KEYWORD, annotation=str),
         Parameter("id", kind=Parameter.POSITIONAL_OR_KEYWORD, default=None, annotation=str | None),
-        Parameter("filters", kind=Parameter.POSITIONAL_OR_KEYWORD, default=None, annotation=dict_type | None),
+        Parameter("filters", kind=Parameter.POSITIONAL_OR_KEYWORD, default=None, annotation=filters_type | None),
         Parameter("payload", kind=Parameter.POSITIONAL_OR_KEYWORD, default=None, annotation=payload_type | None),
         Parameter("add_attachment", kind=Parameter.POSITIONAL_OR_KEYWORD, default=False, annotation=bool),
         Parameter("delivnote", kind=Parameter.POSITIONAL_OR_KEYWORD, default=False, annotation=bool),
@@ -705,8 +745,8 @@ def _build_annotations(_spec: ToolSpec) -> dict[str, Any]:
         "return": Any,
         "action": str,
         "id": str | None,
-        "filters": dict[str, Any] | None,
-        "payload": dict[str, Any] | list[dict[str, Any]] | None,
+        "filters": dict[str, Any] | str | None,
+        "payload": dict[str, Any] | list[dict[str, Any]] | str | None,
         "add_attachment": bool,
         "delivnote": bool,
         "bank_id": str | None,
@@ -731,14 +771,22 @@ def build_tool_handler(
     def handler(
         action: str,
         id: str | None = None,
-        filters: dict[str, Any] | None = None,
-        payload: dict[str, Any] | list[dict[str, Any]] | None = None,
+        filters: dict[str, Any] | str | None = None,
+        payload: dict[str, Any] | list[dict[str, Any]] | str | None = None,
         add_attachment: bool = False,
         delivnote: bool = False,
         bank_id: str | None = None,
         confirmation_code: str | None = None,
         confirmed: bool = False,
     ) -> Any:
+        parse_errors: list[str] = []
+        filters, filters_error = _coerce_json_arg(filters)
+        if filters_error is not None:
+            parse_errors.append(f"filters {filters_error}")
+        payload, payload_error = _coerce_json_arg(payload)
+        if payload_error is not None:
+            parse_errors.append(f"payload {payload_error}")
+
         args = {
             "action": action,
             "id": id,
@@ -759,6 +807,14 @@ def build_tool_handler(
 
         if selected is None:
             return _validation_error(tool_name=tool_name, action=action, allowed_actions=allowed_actions)
+
+        if parse_errors:
+            return _json_parse_error(
+                tool_name=tool_name,
+                action=action,
+                allowed_actions=allowed_actions,
+                parse_errors=parse_errors,
+            )
 
         missing_fields = tuple(
             field_name for field_name in selected.required_fields if args[field_name] in (None, "", [])

@@ -66,10 +66,10 @@ Coverage: **6/14 (42.9%)**
 |---|---|---|---|---|
 | `Customers.send` | `sendcustomer` | `v2` | ❌ | — |
 | `Dimensions.add` | `senddimensions` | `v2` | ❌ | — |
-| `Financial.create_payment` | `sendPaymentV` | `v1` | ✅ | test_purchase_invoice_integration.py |
+| `Financial.create_payment` | `sendPaymentV` | `v1` | ✅ | test_duplicate_prevention.py, test_phase0_foundation.py, test_purchase_invoice_integration.py |
 | `Items.add` | `senditems` | `v2` | ❌ | — |
 | `Items.update` | `updateitem` | `v1` | ❌ | — |
-| `Purchases.send_invoice` | `sendpurchinvoice` | `v1` | ✅ | test_purchase_invoice_integration.py |
+| `Purchases.send_invoice` | `sendpurchinvoice` | `v1` | ✅ | test_duplicate_prevention.py, test_phase0_foundation.py, test_purchase_invoice_integration.py |
 | `Sales.delete_invoice` | `deleteinvoice` | `v1` | ❌ | — |
 | `Sales.send_credit_invoice` | `sendinvoice` | `v1` | ✅ | test_phase0_foundation.py, test_priority1_invoice_delivery.py, test_send_invoice.py |
 | `Sales.send_invoice` | `sendinvoice` | `v1` | ✅ | test_phase0_foundation.py, test_priority1_invoice_delivery.py, test_send_invoice.py |

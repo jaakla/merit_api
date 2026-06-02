@@ -53,6 +53,56 @@ def test_retries_on_request_exception_then_succeeds():
     assert session.post.call_count == 2
 
 
+def test_non_idempotent_write_is_not_retried_on_request_exception():
+    session = Mock()
+    session.post.side_effect = [
+        requests.exceptions.Timeout("timeout"),
+        _mock_response(status_code=200, payload={"InvoiceId": "pay-1"}),
+    ]
+
+    client = MeritAPI("test_id", "test_key", session=session, max_retries=3, retry_backoff=0)
+    with pytest.raises(MeritAPIError):
+        client._post("sendPaymentV", {"BillNo": "S1"}, idempotent=False)
+
+    # A timed-out write may have committed server-side; replaying it could double-charge,
+    # so it must not be retried.
+    assert session.post.call_count == 1
+
+
+def test_non_idempotent_write_is_not_retried_on_transient_status():
+    session = Mock()
+    session.post.side_effect = [
+        _mock_response(status_code=503, payload={"Message": "retry"}),
+        _mock_response(status_code=200, payload={"InvoiceId": "pay-1"}),
+    ]
+
+    client = MeritAPI("test_id", "test_key", session=session, max_retries=3, retry_backoff=0)
+    with pytest.raises(MeritAPIError):
+        client._post("sendpurchinvoice", {"BillNo": "S1"}, idempotent=False)
+
+    assert session.post.call_count == 1
+
+
+def test_non_idempotent_write_is_retried_when_idempotency_key_present():
+    session = Mock()
+    session.post.side_effect = [
+        requests.exceptions.Timeout("timeout"),
+        _mock_response(status_code=200, payload={"InvoiceId": "pay-1"}),
+    ]
+
+    client = MeritAPI("test_id", "test_key", session=session, max_retries=1, retry_backoff=0)
+    result = client._post(
+        "sendPaymentV",
+        {"BillNo": "S1"},
+        idempotent=False,
+        idempotency_key="abc-123",
+    )
+
+    # With a server-honored idempotency key, a replay is safe, so retries resume.
+    assert result == {"InvoiceId": "pay-1"}
+    assert session.post.call_count == 2
+
+
 def test_raises_api_error_when_payload_contains_business_error():
     session = Mock()
     session.post.return_value = _mock_response(

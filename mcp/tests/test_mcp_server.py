@@ -367,6 +367,96 @@ def test_write_sales_invoice_create_rejects_get_response_shape_before_preview():
     asyncio.run(scenario())
 
 
+def test_read_filters_accepts_json_string_from_bridge():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload=[{"Id": "cust-1"}])
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_read_master_data",
+            {"action": "customers_list", "filters": '{"Name": "Acme"}'},
+        )
+
+        assert json.loads(result.content[0].text) == [{"Id": "cust-1"}]
+        sent_body = json.loads(session.post.call_args.kwargs["data"].decode("utf-8"))
+        assert sent_body["Name"] == "Acme"
+
+    asyncio.run(scenario())
+
+
+def test_write_payload_accepts_json_string_from_bridge():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload={"Id": "cust-1"})
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await _preview_and_confirm(
+            server,
+            "merit_write_customers",
+            {"action": "customer_upsert", "payload": json.dumps({"Name": "Acme OÜ"})},
+        )
+
+        assert result.structured_content == {"Id": "cust-1"}
+        sent_body = json.loads(session.post.call_args.kwargs["data"].decode("utf-8"))
+        assert sent_body["Name"] == "Acme OÜ"
+
+    asyncio.run(scenario())
+
+
+def test_write_payload_json_string_list_is_parsed_to_list():
+    async def scenario():
+        session = Mock()
+        session.post.return_value = _mock_response(status_code=200, payload=[{"Id": "item-1"}])
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await _preview_and_confirm(
+            server,
+            "merit_write_financial",
+            {"action": "items_add", "payload": json.dumps([{"Code": "A1"}])},
+        )
+
+        assert json.loads(result.content[0].text) == [{"Id": "item-1"}]
+        sent_body = json.loads(session.post.call_args.kwargs["data"].decode("utf-8"))
+        assert sent_body == [{"Code": "A1"}]
+
+    asyncio.run(scenario())
+
+
+def test_payload_invalid_json_string_returns_structured_error():
+    async def scenario():
+        session = Mock()
+        client = MeritAPI("api-id", "api-key", session=session)
+        server = build_mcp_server(
+            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
+            client_factory=lambda _: client,
+        )
+
+        result = await server.call_tool(
+            "merit_write_customers",
+            {"action": "customer_upsert", "payload": "{not valid json"},
+        )
+
+        assert result.structured_content["error"] == "ValidationError"
+        assert "JSON" in result.structured_content["message"]
+        assert any("payload" in error for error in result.structured_content["json_errors"])
+        assert session.post.call_count == 0
+
+    asyncio.run(scenario())
+
+
 def test_connected_mode_write_customers_routes_customer_upsert():
     async def scenario():
         session = Mock()

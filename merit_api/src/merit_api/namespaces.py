@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List, Optional
 import base64
+
+from .exceptions import MeritAPIError
 
 
 def _to_yyyymmdd(date_str: str) -> str:
@@ -13,6 +15,37 @@ def _to_yyyymmdd(date_str: str) -> str:
     if len(date_str) == 8 and date_str.isdigit():
         return date_str
     return datetime.fromisoformat(date_str).strftime("%Y%m%d")
+
+
+def _iter_scalar_values(value: Any) -> Iterable[Any]:
+    """Yield every scalar (non-container) value nested anywhere inside ``value``."""
+    if isinstance(value, dict):
+        for nested in value.values():
+            yield from _iter_scalar_values(nested)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _iter_scalar_values(item)
+    else:
+        yield value
+
+
+def _amounts_equal(a: Any, b: Any, *, tolerance: float = 0.005) -> bool:
+    """Compare two values as money amounts, tolerant of float/str representations."""
+    try:
+        return abs(float(a) - float(b)) <= tolerance
+    except (TypeError, ValueError):
+        return False
+
+
+def _record_references(record: Any, token: str) -> bool:
+    """True if ``token`` appears as a string scalar anywhere in ``record``."""
+    token = str(token)
+    return any(isinstance(v, str) and v == token for v in _iter_scalar_values(record))
+
+
+def _record_has_amount(record: Any, amount: Any) -> bool:
+    """True if ``amount`` matches a numeric scalar anywhere in ``record``."""
+    return any(_amounts_equal(v, amount) for v in _iter_scalar_values(record))
 
 
 class Namespace:
@@ -40,7 +73,7 @@ class Customers(Namespace):
 
     def send(self, customer: Dict[str, Any]) -> Dict:
         """Create or update a customer."""
-        return self._client._post("sendcustomer", customer, version="v2")
+        return self._client._post("sendcustomer", customer, version="v2", idempotent=False)
 
 
 class Vendors(Namespace):
@@ -54,7 +87,7 @@ class Vendors(Namespace):
 
     def send(self, vendor: Dict[str, Any]) -> Dict:
         """Create or update a vendor."""
-        return self._client._post("sendvendor", vendor)
+        return self._client._post("sendvendor", vendor, idempotent=False)
 
     def update(self, vendor: Dict[str, Any]) -> Dict:
         """Update an existing vendor. Only Id is required; all other fields are optional.
@@ -82,7 +115,7 @@ class Items(Namespace):
 
     def add(self, items: List[Dict[str, Any]]) -> List[Dict]:
         """Add new items."""
-        return self._client._post("senditems", items, version="v2")
+        return self._client._post("senditems", items, version="v2", idempotent=False)
 
     def update(self, item: Dict[str, Any]) -> Dict:
         """Update an item."""
@@ -157,7 +190,7 @@ class Sales(Namespace):
             })
             # Returns: {"CustomerId": "...", "InvoiceId": "...", "InvoiceNo": "...", "RefNo": "..."}
         """
-        return self._client._post("sendinvoice", invoice)
+        return self._client._post("sendinvoice", invoice, idempotent=False)
 
     def delete_invoice(self, id: str) -> Dict:
         """Delete an invoice."""
@@ -195,7 +228,7 @@ class Sales(Namespace):
                 "TotalAmount": -120.00,
             })
         """
-        return self._client._post("sendinvoice", credit_data)
+        return self._client._post("sendinvoice", credit_data, idempotent=False)
 
     def send_invoice_by_email(self, id: str, delivnote: bool = False) -> Dict:
         """Send a sales invoice by email to the customer.
@@ -215,7 +248,8 @@ class Sales(Namespace):
         return self._client._post(
             "sendinvoicebyemail",
             {"Id": id, "DelivNote": delivnote},
-            version="v2"
+            version="v2",
+            idempotent=False,
         )
 
     def send_invoice_by_einvoice(self, id: str, delivnote: bool = False) -> Dict:
@@ -236,7 +270,8 @@ class Sales(Namespace):
         return self._client._post(
             "sendinvoiceaseinv",
             {"Id": id, "DelivNote": delivnote},
-            version="v2"
+            version="v2",
+            idempotent=False,
         )
 
     def get_invoice_pdf(self, id: str) -> Dict[str, Any]:
@@ -292,8 +327,47 @@ class Purchases(Namespace):
         """Get purchase orders waiting approval."""
         return self._client._post("GetPOrders", kwargs, version="v2")
 
-    def send_invoice(self, invoice: Dict[str, Any]) -> Dict:
+    def _find_duplicate(self, invoice: Dict[str, Any]) -> Optional[Dict]:
+        """Return an existing purchase invoice matching this one's vendor + BillNo, if any.
+
+        Best-effort duplicate guard: Merit assigns no natural key to incoming invoices,
+        so re-sending the same supplier bill creates a second record. We treat a match on
+        ``BillNo`` for the same vendor (by Id, else by Name) within a wide window as a
+        likely duplicate. Returns None when no ``BillNo`` is supplied (nothing to match on).
+        """
+        bill_no = invoice.get("BillNo")
+        if not bill_no:
+            return None
+        vendor = invoice.get("Vendor") or {}
+        vendor_id = vendor.get("Id") if isinstance(vendor, dict) else None
+        vendor_name = vendor.get("Name") if isinstance(vendor, dict) else None
+
+        today = datetime.now()
+        existing = self.get_invoices(
+            PeriodStart=(today - timedelta(days=730)).strftime("%Y%m%d"),
+            PeriodEnd=(today + timedelta(days=1)).strftime("%Y%m%d"),
+        )
+        if not isinstance(existing, list):
+            return None
+        for candidate in existing:
+            if not isinstance(candidate, dict) or candidate.get("BillNo") != bill_no:
+                continue
+            # Same supplier bill number is a duplicate unless the vendor demonstrably differs.
+            cand_vendor_id = candidate.get("VendorId")
+            cand_vendor_name = candidate.get("VendorName")
+            if vendor_id and cand_vendor_id and cand_vendor_id != vendor_id:
+                continue
+            if vendor_name and cand_vendor_name and cand_vendor_name != vendor_name:
+                continue
+            return candidate
+        return None
+
+    def send_invoice(self, invoice: Dict[str, Any], *, allow_duplicate: bool = False) -> Dict:
         """Create a purchase invoice.
+
+        By default this refuses to create a second invoice for the same vendor + BillNo
+        (Merit does not deduplicate, so re-sending the same supplier bill would create a
+        duplicate record). Pass ``allow_duplicate=True`` to bypass the check.
 
         Tricky requirements:
         - Vendor: must include both ``Id`` AND ``Name`` even for an existing vendor.
@@ -337,7 +411,16 @@ class Purchases(Namespace):
             })
             # Returns: {"VendorId": "...", "BillId": "...", "BillNo": "...", "BatchInfo": "..."}
         """
-        return self._client._post("sendpurchinvoice", invoice)
+        if not allow_duplicate:
+            duplicate = self._find_duplicate(invoice)
+            if duplicate is not None:
+                raise MeritAPIError(
+                    f"A purchase invoice with BillNo {invoice.get('BillNo')!r} already exists "
+                    f"for this vendor (BillId {duplicate.get('BillId')!r}). "
+                    "Pass allow_duplicate=True to create it anyway.",
+                    response_body=duplicate,
+                )
+        return self._client._post("sendpurchinvoice", invoice, idempotent=False)
 
 
 class Financial(Namespace):
@@ -361,7 +444,35 @@ class Financial(Namespace):
         """Get income payments for a bank."""
         return self._client._get(f"Banks/{bank_id}/IncomePayments", kwargs, version="v2")
 
-    def create_payment(self, payment: Dict[str, Any]) -> Dict:
+    def _find_duplicate_payment(self, payment: Dict[str, Any]) -> Optional[Dict]:
+        """Return an existing payment that already settles this invoice, if any.
+
+        Best-effort guard against double payment: Merit does not deduplicate, so calling
+        ``create_payment`` twice for the same bill produces two bank transfers. We look for
+        an existing payment in a wide window that references the same ``BillNo`` and matches
+        the ``Amount``. Requiring both keeps false positives low. Returns None when there is
+        no ``BillNo`` to match on.
+        """
+        bill_no = payment.get("BillNo")
+        if not bill_no:
+            return None
+        amount = payment.get("Amount")
+
+        today = datetime.now()
+        existing = self.get_payments(
+            PeriodStart=(today - timedelta(days=730)).strftime("%Y%m%d"),
+            PeriodEnd=(today + timedelta(days=1)).strftime("%Y%m%d"),
+        )
+        if not isinstance(existing, list):
+            return None
+        for candidate in existing:
+            if not _record_references(candidate, bill_no):
+                continue
+            if amount is None or _record_has_amount(candidate, amount):
+                return candidate
+        return None
+
+    def create_payment(self, payment: Dict[str, Any], *, allow_duplicate: bool = False) -> Dict:
         """Create a payment for a purchase invoice (sendPaymentV).
 
         Auto-resolves missing fields before sending:
@@ -371,8 +482,21 @@ class Financial(Namespace):
         Raises ValueError if either field cannot be resolved, preventing a silent
         internal payment without bank transfer details.
 
+        By default refuses to create a second payment that references the same BillNo and
+        amount as an existing one. Pass ``allow_duplicate=True`` to bypass this guard.
+
         Returns the raw Merit API response (all fields as-is).
         """
+        if not allow_duplicate:
+            duplicate = self._find_duplicate_payment(payment)
+            if duplicate is not None:
+                raise MeritAPIError(
+                    f"A payment referencing BillNo {payment.get('BillNo')!r} for amount "
+                    f"{payment.get('Amount')!r} already exists. "
+                    "Pass allow_duplicate=True to pay it again.",
+                    response_body=duplicate,
+                )
+
         if not payment.get("IBAN"):
             vendor_name = payment.get("VendorName", "")
             if vendor_name:
@@ -408,7 +532,7 @@ class Financial(Namespace):
             )
 
         version = "v2" if payment.get("CurrencyCode") else "v1"
-        return self._client._post("sendPaymentV", payment, version=version)
+        return self._client._post("sendPaymentV", payment, version=version, idempotent=False)
 
     def get_gl_batches(self, **kwargs) -> List[Dict]:
         """Get GL transactions. PeriodStart/PeriodEnd (YYYYmmdd) default to last 3 months if omitted."""
@@ -478,7 +602,7 @@ class Taxes(Namespace):
 
     def send(self, tax: Dict[str, Any]) -> Dict:
         """Create or update a tax rate."""
-        return self._client._post("sendtax", tax, version="v2")
+        return self._client._post("sendtax", tax, version="v2", idempotent=False)
 
 
 class Dimensions(Namespace):
@@ -488,7 +612,7 @@ class Dimensions(Namespace):
 
     def add(self, dimensions: List[Dict[str, Any]]) -> List[Dict]:
         """Add dimensions."""
-        return self._client._post("senddimensions", dimensions, version="v2")
+        return self._client._post("senddimensions", dimensions, version="v2", idempotent=False)
 
 
 class Pricing(Namespace):
