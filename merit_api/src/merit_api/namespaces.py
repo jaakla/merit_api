@@ -327,13 +327,26 @@ class Purchases(Namespace):
         """Get purchase orders waiting approval."""
         return self._client._post("GetPOrders", kwargs, version="v2")
 
+    @staticmethod
+    def _parse_doc_date(value: Any) -> Optional[datetime]:
+        """Parse a Merit DocDate (YYYYmmdd or ISO 8601) into a datetime, or None."""
+        if not value or not isinstance(value, str):
+            return None
+        try:
+            if len(value) == 8 and value.isdigit():
+                return datetime.strptime(value, "%Y%m%d")
+            return datetime.fromisoformat(value)
+        except (ValueError, TypeError):
+            return None
+
     def _find_duplicate(self, invoice: Dict[str, Any]) -> Optional[Dict]:
         """Return an existing purchase invoice matching this one's vendor + BillNo, if any.
 
         Best-effort duplicate guard: Merit assigns no natural key to incoming invoices,
         so re-sending the same supplier bill creates a second record. We treat a match on
-        ``BillNo`` for the same vendor (by Id, else by Name) within a wide window as a
-        likely duplicate. Returns None when no ``BillNo`` is supplied (nothing to match on).
+        ``BillNo`` for the same vendor (by Id, else by Name) within a recent window (bounded
+        by Merit's 3-month ``getpurchorders`` limit, anchored on the invoice's ``DocDate``)
+        as a likely duplicate. Returns None when no ``BillNo`` is supplied (nothing to match).
         """
         bill_no = invoice.get("BillNo")
         if not bill_no:
@@ -342,10 +355,23 @@ class Purchases(Namespace):
         vendor_id = vendor.get("Id") if isinstance(vendor, dict) else None
         vendor_name = vendor.get("Name") if isinstance(vendor, dict) else None
 
+        # Merit's getpurchorders enforces a hard 3-month maximum period, so we cannot
+        # scan a wide window here. Anchor the check on the invoice's own DocDate (the
+        # likely duplicate is from around the same date) but never request a span wider
+        # than ~3 months, staying safely under the limit for 31-day months.
         today = datetime.now()
+        period_end = today + timedelta(days=1)
+        max_span = timedelta(days=85)
+        doc_date = self._parse_doc_date(invoice.get("DocDate"))
+        period_start = doc_date or (period_end - max_span)
+        # Clamp so the requested window is always within Merit's 3-month limit.
+        if period_start < period_end - max_span:
+            period_start = period_end - max_span
+        if period_start > period_end:
+            period_start = period_end - max_span
         existing = self.get_invoices(
-            PeriodStart=(today - timedelta(days=730)).strftime("%Y%m%d"),
-            PeriodEnd=(today + timedelta(days=1)).strftime("%Y%m%d"),
+            PeriodStart=period_start.strftime("%Y%m%d"),
+            PeriodEnd=period_end.strftime("%Y%m%d"),
         )
         if not isinstance(existing, list):
             return None

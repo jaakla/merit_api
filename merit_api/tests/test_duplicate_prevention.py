@@ -1,5 +1,7 @@
 """Unit tests for the duplicate-write guards on purchase invoices and payments."""
 
+import json
+from datetime import datetime
 from unittest.mock import Mock
 
 import pytest
@@ -39,6 +41,56 @@ def _purchase_payload(bill_no="INV-1"):
         "TaxAmount": [{"TaxId": "t1", "Amount": 0.0}],
         "TotalAmount": 10.0,
     }
+
+
+def _getpurchorders_period(session):
+    """Return the (PeriodStart, PeriodEnd) sent to the getpurchorders endpoint."""
+    for call in session.post.call_args_list:
+        url = call.args[0] if call.args else call.kwargs.get("url", "")
+        if "getpurchorders" in url:
+            body = json.loads(call.kwargs["data"].decode("utf-8"))
+            return body.get("PeriodStart"), body.get("PeriodEnd")
+    raise AssertionError("getpurchorders was never called")
+
+
+@pytest.mark.parametrize(
+    "doc_date",
+    [
+        "20260101",  # early in the fiscal year — old enough to blow a wide window
+        "20250101",  # over a year before "today"
+        "20260601",  # recent
+        None,  # missing DocDate
+        "not-a-date",  # unparseable
+    ],
+)
+def test_purchase_duplicate_check_period_stays_within_three_months(doc_date):
+    """Regression for Merit's "Periood liiga pikk(max 3 kuud)" error.
+
+    The internal getpurchorders duplicate check must never request a window wider
+    than Merit's hard 3-month limit, regardless of the invoice's DocDate.
+    """
+    session = Mock()
+
+    def post(url, **_):
+        if "getpurchorders" in url:
+            return _mock_response(payload=[])
+        return _mock_response(payload={"BillId": "new-1"})
+
+    session.post.side_effect = post
+    client = MeritAPI("id", "key", session=session)
+
+    payload = _purchase_payload("INV-1")
+    if doc_date is None:
+        payload.pop("DocDate")
+    else:
+        payload["DocDate"] = doc_date
+
+    client.purchases.send_invoice(payload)
+
+    start, end = _getpurchorders_period(session)
+    assert start is not None and end is not None
+    span = (datetime.strptime(end, "%Y%m%d") - datetime.strptime(start, "%Y%m%d")).days
+    assert 0 <= span <= 92, f"period span {span}d exceeds Merit's 3-month limit"
 
 
 def test_purchase_invoice_create_rejects_duplicate_bill_no_for_same_vendor():
