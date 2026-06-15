@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-06-15
+
 ### Fixed
 
+- Purchase invoice creation (`purchases.send_invoice` / MCP `merit_write_purchases`)
+  no longer fails with Merit's `Periood liiga pikk(max 3 kuud)` error. The internal
+  `getpurchorders` duplicate check previously requested a 730-day window, exceeding
+  Merit's hard 3-month limit. The check now anchors on the invoice's `DocDate` and
+  clamps the window to ~85 days, always staying within the limit while still catching
+  recent duplicates.
 - `customers.send` (customer_upsert) now targets `/api/v2/sendcustomer` instead of the
   non-existent `/api/v1/sendcustomer`, which was returning 404 and blocking customer
   creation through the MCP `merit_write_customers` tool.
