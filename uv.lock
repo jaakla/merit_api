@@ -800,7 +800,7 @@ wheels = [
 
 [[package]]
 name = "merit-api"
-version = "0.4.4"
+version = "0.5.2"
 source = { editable = "merit_api" }
 dependencies = [
     { name = "requests" },
@@ -822,7 +822,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "merit-unofficial-mcp-server"
-version = "0.4.7"
+version = "0.5.2"
 source = { editable = "mcp" }
 dependencies = [
     { name = "fastmcp" },
