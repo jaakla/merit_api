@@ -4,6 +4,11 @@ Integration tests for Merit API read methods.
 Requires real credentials. Run with:
     MERIT_API_INTEGRATION_TEST=true pytest tests/test_integration_read.py -v
 
+To also print every request/response exchanged with Merit, add MERIT_API_VERBOSE
+and pytest's -s flag:
+    MERIT_API_INTEGRATION_TEST=true MERIT_API_VERBOSE=true \
+        pytest tests/test_integration_read.py -v -s
+
 404 responses are skipped — they indicate a module not enabled on this account.
 Tests that need a concrete entity id also skip when no suitable source data exists.
 """
@@ -38,8 +43,8 @@ PERIOD_END_DASHED = date.today().strftime("%Y-%m-%d")
 
 
 @pytest.fixture(scope="module")
-def client():
-    return MeritAPI(API_ID, API_KEY)
+def client(merit_logging_kwargs):
+    return MeritAPI(API_ID, API_KEY, **merit_logging_kwargs)
 
 
 def _call(fn):

@@ -6,6 +6,11 @@ These tests require real Merit API credentials and an actual invoice to work wit
 Run with:
     MERIT_API_INTEGRATION_TEST=true pytest tests/test_priority1_integration.py -v
 
+Add MERIT_API_VERBOSE=true and pytest's -s flag to print every request/response
+exchanged with Merit:
+    MERIT_API_INTEGRATION_TEST=true MERIT_API_VERBOSE=true \
+        pytest tests/test_priority1_integration.py -v -s
+
 Tests will skip if:
 - MERIT_API_INTEGRATION_TEST is not set to "true"
 - MERIT_API_ID or MERIT_API_KEY are not set
@@ -42,8 +47,8 @@ PERIOD_END = date.today().strftime("%Y%m%d")
 
 
 @pytest.fixture(scope="module")
-def client():
-    return MeritAPI(API_ID, API_KEY)
+def client(merit_logging_kwargs):
+    return MeritAPI(API_ID, API_KEY, **merit_logging_kwargs)
 
 
 _EINVOICE_NO_CAPABILITY_MSGS = ("api-noeinv", "puudub e-arve")

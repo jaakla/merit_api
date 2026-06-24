@@ -4,6 +4,11 @@ Integration test for purchase invoice creation with PDF attachment.
 Run with:
     MERIT_API_INTEGRATION_TEST=true pytest tests/test_purchase_invoice_integration.py -v
 
+Add MERIT_API_VERBOSE=true and pytest's -s flag to print every request/response
+exchanged with Merit:
+    MERIT_API_INTEGRATION_TEST=true MERIT_API_VERBOSE=true \
+        pytest tests/test_purchase_invoice_integration.py -v -s
+
 Tests will skip if:
 - MERIT_API_INTEGRATION_TEST is not set to "true"
 - MERIT_API_ID or MERIT_API_KEY are not set
@@ -58,8 +63,8 @@ def _minimal_pdf_b64() -> str:
 
 
 @pytest.fixture(scope="module")
-def client():
-    return MeritAPI(API_ID, API_KEY)
+def client(merit_logging_kwargs):
+    return MeritAPI(API_ID, API_KEY, **merit_logging_kwargs)
 
 
 class TestSendPurchaseInvoiceWithAttachment:
