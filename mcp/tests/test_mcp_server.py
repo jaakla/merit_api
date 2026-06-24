@@ -46,6 +46,34 @@ def _valid_sales_invoice_payload():
     }
 
 
+def _valid_purchase_invoice_payload():
+    return {
+        "Vendor": {"Id": "ven-1", "Name": "Vendor"},
+        "DocDate": "20260510",
+        "TransactionDate": "20260510",
+        "DueDate": "20260520",
+        "BillNo": "INV-2026-001",
+        "CurrencyCode": "EUR",
+        "CurrencyRate": 1.0,
+        "InvoiceRow": [
+            {
+                "Item": {
+                    "Code": "SVC01",
+                    "Description": "Consulting services",
+                    "UOMName": "tk",
+                    "TaxId": "tax-1",
+                },
+                "Quantity": 1,
+                "Price": 100,
+                "TaxId": "tax-1",
+                "GLAccountCode": "4017",
+            }
+        ],
+        "TaxAmount": [{"TaxId": "tax-1", "Amount": 0}],
+        "TotalAmount": 100,
+    }
+
+
 async def _preview_and_confirm(server, tool_name, arguments):
     preview = await server.call_tool(tool_name, arguments)
     preview_payload = preview.structured_content
@@ -523,7 +551,7 @@ def test_connected_mode_write_purchases_routes_purchase_invoice_create():
         result = await _preview_and_confirm(
             server,
             "merit_write_purchases",
-            {"action": "purchase_invoice_create", "payload": {"Vendor": {"Id": "ven-1", "Name": "Vendor"}}},
+            {"action": "purchase_invoice_create", "payload": _valid_purchase_invoice_payload()},
         )
 
         assert result.structured_content == {"BillId": "bill-1"}
@@ -944,7 +972,17 @@ def test_mcp_resources_and_prompts_reference_consolidated_tools():
         sales_tool = next(tool for tool in catalog_payload["tools"] if tool["name"] == "merit_write_sales")
         sales_create = next(action for action in sales_tool["actions"] if action["name"] == "sales_invoice_create")
         assert "InvoiceRow (singular)" in sales_create["description"]
-        assert "7e170b45-fe96-4048-b824-39733c33e734" in sales_create["description"]
+        # Tax GUIDs are company-specific and must not be hardcoded; the description
+        # instructs resolving them via taxes_list instead.
+        assert "7e170b45-fe96-4048-b824-39733c33e734" not in sales_create["description"]
+        assert "taxes_list" in sales_create["description"]
+        purchase_tool = next(tool for tool in catalog_payload["tools"] if tool["name"] == "merit_write_purchases")
+        purchase_create = next(
+            action for action in purchase_tool["actions"] if action["name"] == "purchase_invoice_create"
+        )
+        assert "GLAccountCode" in purchase_create["description"]
+        assert "taxes_list" in purchase_create["description"]
+        assert "7e170b45-fe96-4048-b824-39733c33e734" not in purchase_create["description"]
         assert "merit_read_master_data" in invoice_prompt.messages[0].content.text
         assert "merit_write_sales" in invoice_prompt.messages[0].content.text
         assert "InvoiceNo" in invoice_prompt.messages[0].content.text
