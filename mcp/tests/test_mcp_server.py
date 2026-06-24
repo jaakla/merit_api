@@ -167,6 +167,7 @@ def test_get_setup_instructions_reports_setup_mode_when_credentials_missing():
         assert payload["mode"] == "setup"
         assert payload["error"] == "Merit API credentials are not configured."
         assert "MERIT_API_ID" in payload["supported_env_vars"]
+        assert set(payload["versions"]) == {"mcp_server", "sdk"}
 
     asyncio.run(scenario())
 
@@ -186,6 +187,7 @@ def test_get_setup_instructions_reports_configured_when_credentials_present():
         assert payload["credentials_present"] is True
         assert payload["country"] == "PL"
         assert "error" not in payload
+        assert set(payload["versions"]) == {"mcp_server", "sdk"}
 
     asyncio.run(scenario())
 
@@ -967,6 +969,8 @@ def test_mcp_resources_and_prompts_reference_consolidated_tools():
         catalog_payload = json.loads(catalog.contents[0].content)
 
         assert info_payload["setup_mode"] is True
+        assert set(info_payload["versions"]) == {"mcp_server", "sdk"}
+        assert info_payload["sdk_version"] == info_payload["versions"]["sdk"]
         assert [tool["name"] for tool in catalog_payload["tools"]] == [spec.name for spec in get_tool_specs()]
         assert any(action["name"] == "customers_list" for action in catalog_payload["tools"][0]["actions"])
         sales_tool = next(tool for tool in catalog_payload["tools"] if tool["name"] == "merit_write_sales")

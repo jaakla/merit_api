@@ -2,7 +2,7 @@ from typing import Sequence
 
 from fastmcp import FastMCP
 
-from .config import SUPPORTED_COUNTRIES, SUPPORTED_ENV_VARS
+from .config import SUPPORTED_COUNTRIES, SUPPORTED_ENV_VARS, build_versions
 from .registry import ToolSpec, tool_catalog_entry
 
 
@@ -20,9 +20,12 @@ def register_resources(
         description="Basic discovery information for the Merit API MCP server.",
     )
     def server_info() -> dict:
+        versions = build_versions()
         return {
             "name": "merit-api",
             "version": package_version,
+            "versions": versions,
+            "sdk_version": versions["sdk"],
             "setup_mode": setup_mode,
             "supported_env_vars": list(SUPPORTED_ENV_VARS),
             "supported_countries": list(SUPPORTED_COUNTRIES),

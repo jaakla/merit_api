@@ -1,10 +1,31 @@
 import os
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError, version
 from typing import Mapping, Optional
 
 
 SUPPORTED_ENV_VARS = ("MERIT_API_ID", "MERIT_API_KEY", "MERIT_API_COUNTRY")
 SUPPORTED_COUNTRIES = ("EE", "PL")
+
+
+def _dist_version(distribution: str) -> str:
+    try:
+        return version(distribution)
+    except PackageNotFoundError:  # pragma: no cover - editable/source checkout without metadata
+        return "0.0.0+unknown"
+
+
+def build_versions() -> dict:
+    """Resolved versions of the MCP server and the underlying SDK.
+
+    Read from installed package metadata so there is a single source of truth.
+    Surfaced in get_setup_instructions and the merit://server/info resource so a
+    user (or agent) can confirm whether they are on the version that fixes a bug.
+    """
+    return {
+        "mcp_server": _dist_version("merit-unofficial-mcp-server"),
+        "sdk": _dist_version("merit-api"),
+    }
 
 
 @dataclass(frozen=True)
@@ -36,6 +57,7 @@ def build_setup_payload(
 ) -> dict:
     payload = {
         "mode": "setup",
+        "versions": build_versions(),
         "error": "Merit API credentials are not configured.",
         "message": (
             "Set MERIT_API_ID and MERIT_API_KEY to enable API-backed MCP tools. "
@@ -59,6 +81,7 @@ def build_setup_payload(
 def build_configured_payload(config: MeritMCPConfig) -> dict:
     return {
         "mode": "configured",
+        "versions": build_versions(),
         "message": (
             "Merit API credentials are configured. API-backed MCP tools are enabled."
         ),
