@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-06-24
+
+### Fixed
+
+- Purchase invoice creation (MCP `merit_write_purchases` action
+  `purchase_invoice_create`) now ships full schema guidance and payload
+  validation, matching the sales invoice tool. Previously the action had only a
+  one-line description and no validator, so callers guessed the wrong shape
+  (`TaxName`/`ArticleCode`/`AccountCode`/`VendorId`/`DocumentDate`) and Merit
+  returned cryptic errors such as `VAT with Id 00000000-0000-0000-0000-000000000000
+  is missing or nonactive` and `NullReferenceException`. The new validator rejects
+  those mistakes up front and points to the correct fields (`Vendor.{Id,Name}`,
+  `DocDate`, `Item.{Code,Description,UOMName,TaxId}`, `GLAccountCode`, `TaxId` GUID,
+  `TaxAmount`, `TotalAmount`).
+
+### Changed
+
+- Removed the hardcoded company-specific `GOOGOLPLEX_NO_VAT_TAX_ID` tax GUID from
+  the MCP tool descriptions. Merit tax GUIDs are per-company, so both the sales and
+  purchase invoice descriptions now instruct resolving tax IDs via
+  `merit_read_master_data action=taxes_list` (e.g. match `Ei ole käive` /
+  `Not included in Turnover` for no-VAT) rather than hardcoding a GUID.
+
 ## [0.5.1] - 2026-06-15
 
 ### Fixed
