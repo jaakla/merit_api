@@ -284,6 +284,69 @@ SDK live integratsioonitestid on opt-in:
 MERIT_API_INTEGRATION_TEST=true uv run --package merit-api pytest
 ```
 
+Iga Merit päringu ja vastuse väljatrükkimiseks lisa `MERIT_API_VERBOSE=true` ja pytesti `-s` lipp:
+
+```bash
+MERIT_API_INTEGRATION_TEST=true MERIT_API_VERBOSE=true uv run --package merit-api pytest -s
+```
+
+## Versiooni avaldamine (hooldajale)
+
+Mõlemad paketid — `merit-api` (SDK) ja `merit-unofficial-mcp-server` (MCP server) — avaldatakse PyPI-sse käsitsi; automaatset CI avaldusvoogu ei ole. Versioonid hoitakse lukus, st kõik tõstetakse korraga samale numbrile.
+
+1. **Tõsta versioon** samale numbrile kõigis neljas kohas:
+   - `package.json` — väli `version`
+   - `mcp/pyproject.toml` — `version` ning sõltuvuse pin `merit-api>=X.Y.Z`
+   - `merit_api/pyproject.toml` — `version`
+
+2. **Lisa muudatused** `CHANGELOG.md`-sse uue versiooni pealkirja alla.
+
+3. **Värskenda lukufaili:**
+
+   ```bash
+   uv lock
+   ```
+
+4. **Jooksuta testid:**
+
+   ```bash
+   uv run --package merit-api pytest
+   uv run --package merit-unofficial-mcp-server pytest
+   ```
+
+5. **Tee commit ja silt:**
+
+   ```bash
+   git add -A
+   git commit -m "release: vX.Y.Z"
+   git tag -a vX.Y.Z -m "vX.Y.Z"
+   ```
+
+6. **Lükka GitHubi:**
+
+   ```bash
+   git push origin main
+   git push origin vX.Y.Z
+   ```
+
+7. **Ehita paketid** (tulemused tekivad kausta `dist/`):
+
+   ```bash
+   uv build --package merit-api
+   uv build --package merit-unofficial-mcp-server
+   ```
+
+8. **Avalda PyPI-sse** — kõigepealt SDK (`merit-api`), sest MCP server sõltub sellest, ja alles siis MCP server. Vajab PyPI API tokenit (`UV_PUBLISH_TOKEN` keskkonnamuutuja või lipp `--token`):
+
+   ```bash
+   uv publish dist/merit_api-X.Y.Z*
+   uv publish dist/merit_unofficial_mcp_server-X.Y.Z*
+   ```
+
+Pärast avaldamist laadib `uvx merit-unofficial-mcp-server` automaatselt uue versiooni.
+
+> npm pakett `merit-unofficial-mcp` on aegunud ega vaja enam avaldamist — kasutajad suunatakse `uvx` peale.
+
 ## Hea teada
 
 - Kasuta **tipptasemel AI/LLM mudeleid**, kuigi need on pisut kallimad : **Opus**/**Pro** tase, ja **mitte** Light, mini või Haiku tase. 
