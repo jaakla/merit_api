@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-06-24
+
+### Added
+
+- Version reporting so users (and agents) can confirm whether they are running the
+  build that fixes a given bug:
+  - `get_setup_instructions` now returns a `versions` block (`mcp_server`, `sdk`) in
+    both setup and configured modes.
+  - The `merit://server/info` resource now includes `versions` and `sdk_version`
+    alongside the existing MCP `version`.
+  - The SDK exposes `merit_api.__version__` (read from installed package metadata).
+
+  The MCP server already advertises its version in the `initialize` handshake
+  (`serverInfo.version`); these additions make both the MCP and SDK versions
+  reachable from a normal tool call and from the info resource.
+
 ## [0.5.2] - 2026-06-24
 
 ### Fixed
