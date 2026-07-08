@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Safety:** an `Idempotency-Key` no longer re-enables automatic retries of
+  mutating writes (`sendinvoice`, `sendPaymentV`, …). Merit does not honor the
+  header, so replaying a timed-out write could create a duplicate invoice or
+  payment. The header is still sent when supplied, as forward-compatibility only.
+- Request signatures are regenerated on every retry attempt instead of reusing
+  the first attempt's timestamp, so a backoff sleep cannot push the signed
+  timestamp outside Merit's freshness window.
+- PyPI metadata: real author contact, project URLs (homepage/repository/issues/
+  changelog), keywords, and trove classifiers — the PyPI page previously showed
+  a placeholder email and no source link, which reads as unmaintained/unauditable.
+
 ## [0.5.3] - 2026-06-24
 
 ### Added
