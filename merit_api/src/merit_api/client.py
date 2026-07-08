@@ -200,19 +200,20 @@ class MeritAPI:
         defaults to True. Mutating writes (create invoice, create payment, etc.) pass
         ``idempotent=False`` because Merit does not deduplicate retried POSTs — a
         request that times out after the server already committed it would otherwise be
-        replayed and create a duplicate record. Such writes are retried only when an
-        ``Idempotency-Key`` is supplied (per call or via ``idempotency_key_factory``),
-        since that is the only case where a replay is safe.
+        replayed and create a duplicate record. An ``Idempotency-Key`` header does NOT
+        re-enable retries: Merit does not honor the header, so a replay is never safe.
+        The header is still sent when supplied, purely as forward-compatibility.
         """
         body = body or {}
         serialized_body = self._serialize_body(body)
-        auth_params = self._authenticate(serialized_body)
         url = f"{self.base_url}{version}/{endpoint.lstrip('/')}"
         resolved_idempotency_key = self._resolve_idempotency_key(endpoint, body, idempotency_key)
         headers = self._build_headers(serialized_body, resolved_idempotency_key)
-        retry_allowed = idempotent or resolved_idempotency_key is not None
+        retry_allowed = idempotent
 
         for attempt in range(self.max_retries + 1):
+            # Sign per attempt: a backoff sleep must not reuse a stale timestamp.
+            auth_params = self._authenticate(serialized_body)
             self._log_request(
                 url=url,
                 endpoint=endpoint,
@@ -287,12 +288,12 @@ class MeritAPI:
         """Make a GET request to the API with signed auth params and extra query params."""
         query = query or {}
         serialized_body = ""
-        auth_params = self._authenticate(serialized_body)
         url = f"{self.base_url}{version}/{endpoint.lstrip('/')}"
         headers: JsonDict = {"Accept": "application/json"}
-        params = {**auth_params, **query}
 
         for attempt in range(self.max_retries + 1):
+            auth_params = self._authenticate(serialized_body)
+            params = {**auth_params, **query}
             self._log_request(
                 url=url,
                 endpoint=endpoint,
@@ -354,12 +355,12 @@ class MeritAPI:
         """Make a POST request to retrieve a PDF file."""
         body = body or {}
         serialized_body = self._serialize_body(body)
-        auth_params = self._authenticate(serialized_body)
         url = f"{self.base_url}{version}/{endpoint.lstrip('/')}"
         resolved_idempotency_key = self._resolve_idempotency_key(endpoint, body, idempotency_key)
         headers = self._build_headers(serialized_body, resolved_idempotency_key)
 
         for attempt in range(self.max_retries + 1):
+            auth_params = self._authenticate(serialized_body)
             self._log_request(
                 url=url,
                 endpoint=endpoint,

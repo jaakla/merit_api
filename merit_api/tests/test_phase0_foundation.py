@@ -83,7 +83,7 @@ def test_non_idempotent_write_is_not_retried_on_transient_status():
     assert session.post.call_count == 1
 
 
-def test_non_idempotent_write_is_retried_when_idempotency_key_present():
+def test_non_idempotent_write_is_not_retried_even_with_idempotency_key():
     session = Mock()
     session.post.side_effect = [
         requests.exceptions.Timeout("timeout"),
@@ -91,16 +91,17 @@ def test_non_idempotent_write_is_retried_when_idempotency_key_present():
     ]
 
     client = MeritAPI("test_id", "test_key", session=session, max_retries=1, retry_backoff=0)
-    result = client._post(
-        "sendPaymentV",
-        {"BillNo": "S1"},
-        idempotent=False,
-        idempotency_key="abc-123",
-    )
+    with pytest.raises(MeritAPIError):
+        client._post(
+            "sendPaymentV",
+            {"BillNo": "S1"},
+            idempotent=False,
+            idempotency_key="abc-123",
+        )
 
-    # With a server-honored idempotency key, a replay is safe, so retries resume.
-    assert result == {"InvoiceId": "pay-1"}
-    assert session.post.call_count == 2
+    # Merit does not honor Idempotency-Key, so a replay is never safe: the key
+    # is sent as a header but must not re-enable write retries.
+    assert session.post.call_count == 1
 
 
 def test_raises_api_error_when_payload_contains_business_error():

@@ -26,10 +26,10 @@ invoices = client.sales.get_invoices(
 
 - deterministic request-body serialization for signing
 - configurable timeout and retry handling — retries apply only to idempotent requests;
-  mutating writes (create invoice, create payment, …) are **not** retried, because Merit
-  does not deduplicate a POST that timed out after the server already committed it, so a
-  replay would create a duplicate. Such writes are retried only when an `Idempotency-Key`
-  is supplied.
+  mutating writes (create invoice, create payment, …) are **never** retried automatically,
+  because Merit does not deduplicate a POST that timed out after the server already
+  committed it, so a replay would create a duplicate. This holds even when an
+  `Idempotency-Key` is supplied, since Merit does not honor the header.
 - request and response logging hooks with secret redaction
 - optional idempotency header generation. **Note:** Merit's API does not deduplicate on
   this header, so it is not a duplicate-prevention guarantee — it only prepares for servers

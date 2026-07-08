@@ -10,11 +10,29 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "Jaak", email = "jaak@example.com"},
+    {name = "Jaak Laineste", email = "jaak.laineste@gmail.com"},
+]
+keywords = ["merit", "aktiva", "accounting", "invoicing", "api", "estonia"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial :: Accounting",
 ]
 dependencies = [
     "requests>=2.31.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/jaakla/merit_api"
+Repository = "https://github.com/jaakla/merit_api"
+Issues = "https://github.com/jaakla/merit_api/issues"
+Changelog = "https://github.com/jaakla/merit_api/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
