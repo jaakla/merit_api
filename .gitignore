@@ -37,3 +37,4 @@ package-lock.json
 __pycache__/
 apitest.ipynb
 .claude/
+.DS_Store
