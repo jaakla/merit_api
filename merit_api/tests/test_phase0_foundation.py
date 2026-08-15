@@ -136,6 +136,19 @@ def test_idempotency_key_from_factory_is_included_in_request_headers():
     assert call_kwargs["headers"]["Idempotency-Key"] == "sendinvoice:INV-5"
 
 
+def test_get_query_params_cannot_override_signed_auth_params():
+    session = Mock()
+    session.get.return_value = _mock_response(status_code=200, payload={"Result": "ok"})
+
+    client = MeritAPI("test_id", "test_key", session=session)
+    client._get("PaymentImports", {"signature": "attacker", "timestamp": "20200101000000"})
+
+    call_kwargs = session.get.call_args.kwargs
+    sent_params = call_kwargs["params"]
+    assert sent_params["signature"] != "attacker"
+    assert sent_params["timestamp"] != "20200101000000"
+
+
 def test_request_and_response_loggers_are_called_with_redacted_secret_fields():
     session = Mock()
     session.post.return_value = _mock_response(status_code=200, payload={"ok": True})

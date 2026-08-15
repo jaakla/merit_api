@@ -293,7 +293,7 @@ class MeritAPI:
 
         for attempt in range(self.max_retries + 1):
             auth_params = self._authenticate(serialized_body)
-            params = {**auth_params, **query}
+            params = {**query, **auth_params}
             self._log_request(
                 url=url,
                 endpoint=endpoint,
