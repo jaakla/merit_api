@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Minimal write surface (MCP layer):** the server now exposes only two
+  write tools — `merit_write_customers` with the single `customer_upsert`
+  action, and `merit_write_sales` with the single `sales_invoice_create`
+  action (draft preparation). Removed MCP actions: `vendor_upsert`,
+  `vendor_update`, `sales_invoice_delete`, `credit_invoice_create`,
+  `sales_invoice_send_email`, `sales_invoice_send_einvoice`,
+  `purchase_invoice_create`, `purchase_invoice_payment_create`, `tax_upsert`,
+  `dimensions_add`, `items_add`, `item_update`, and the
+  `merit_write_purchases`/`merit_write_financial` tools entirely. Rationale:
+  AI agents tend to auto-confirm preview/confirm flows, and auto-generated
+  ledger data (purchase invoices, payments, delivery) is costlier to correct
+  in Merit than to enter manually; purchase/cost invoices belong behind a
+  dedicated guarded route (e.g. Costpocket). Registered tools drop from 15 to
+  11; all 50 read actions are unchanged.
+- The full write capability set remains available in the `merit-api` Python
+  SDK (`merit_api` package); only the MCP exposure is restricted.
+
 ## [0.5.5] - 2026-07-09
 
 > Note: the 0.5.4 wheel on PyPI was built before PR #10 merged and does NOT

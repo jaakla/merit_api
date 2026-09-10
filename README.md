@@ -7,11 +7,11 @@
 [![MCP](https://img.shields.io/badge/MCP-server-purple.svg)](https://modelcontextprotocol.io)
 <a href="https://glama.ai/mcp/servers/jaakla/merit_api/score"><img src="https://glama.ai/mcp/servers/jaakla/merit_api/badge" alt="Glama score" width="140" /></a>
 
-> **English summary:** Unofficial MCP server and Python SDK for the [Merit Aktiva](https://aktiva.merit.ee) accounting REST API. Exposes 32 tools, 3 workflow prompts, and 2 resources to AI coding assistants (Claude Code, Cursor, Windsurf, Gemini CLI, etc.), letting you read and write accounting data — customers, invoices, payments, taxes, and more — through natural-language prompts. Write operations use a two-step preview/confirm flow to prevent accidental changes. Requires a Merit Aktiva Premium account and API credentials (`MERIT_API_ID`, `MERIT_API_KEY`). Run/install instantly via `uvx`. **Experimental and unofficial — use at your own risk.**
+> **English summary:** Unofficial MCP server and Python SDK for the [Merit Aktiva](https://aktiva.merit.ee) accounting REST API. Exposes 11 tools (6 read tools with 50 read actions, 2 preview/confirm write tools), 3 workflow prompts, and 2 resources to AI coding assistants (Claude Code, Cursor, Windsurf, Gemini CLI, etc.). The write surface is intentionally minimal — customer create/update and draft sales invoice preparation only; delivery (email/e-invoice), deletion, credit invoices, purchase invoices, and payments are deliberately not exposed so agents cannot generate ledger data that is costly to correct later. Full read access to accounting data, write operations gated behind a two-step preview/confirm flow. Requires a Merit Aktiva Premium account and API credentials (`MERIT_API_ID`, `MERIT_API_KEY`). Run/install instantly via `uvx`. **Experimental and unofficial — use at your own risk.**
 
 ---
 
-MCP server ja Pythoni SDK Merit Aktiva REST API jaoks. MCP server eksponeerib praegu 32 tööriista, 3 töövoo prompti ja 2 ressurssi. See on mõeldud töötama MCP klientidega nagu Claude Code, Codex CLI, Cursor, Windsurf, Cline, Gemini CLI ja sarnased tööriistad.
+MCP server ja Pythoni SDK Merit Aktiva REST API jaoks. MCP server eksponeerib praegu 11 tööriista (6 lugemis-tööriista 50 action'iga, 2 kirjutamis-tööriista eelvaate/kinnituse vooluga), 3 töövoo prompti ja 2 ressurssi. See on mõeldud töötama MCP klientidega nagu Claude Code, Codex CLI, Cursor, Windsurf, Cline, Gemini CLI ja sarnased tööriistad.
 
 > **Aktiivne arendus.** See projekt areneb endiselt. MCP kiht on kasutatav, kuid see ei ole veel täisfunktsionaalne raamatupidamise töövoosüsteem. Kontrolli iga kirjutava operatsiooni tulemust live-raamatupidamisandmete vastu enne selle usaldamist.
 
@@ -159,10 +159,10 @@ Lugemise, Read-only tööriistad:
 
 Muutmise/kirjutamise tööriistad toimivad kahe käsuna, et vältida vigaste andmete sisestust:
 
-- `merit_write_customers` (eelvaade) ja `merit_write_customers_confirm` (kinnitatud muutmine)
-- `merit_write_sales` (eelvaade) ja `merit_write_sales_confirm` (kinnitatud muutmine)
-- `merit_write_purchases` (eelvaade) ja `merit_write_purchases_confirm` (kinnitatud muutmine)
-- `merit_write_financial` (eelvaade) ja `merit_write_financial_confirm` (kinnitatud muutmine)
+- `merit_write_customers` (eelvaade) ja `merit_write_customers_confirm` (kinnitatud muutmine) — ainult `customer_upsert`
+- `merit_write_sales` (eelvaate) ja `merit_write_sales_confirm` (kinnitatud muutmine) — ainult `sales_invoice_create` (mustand)
+
+**Kirjutamispind on tahtlikult minimaalne.** Müügiarve saatmine (email/e-arve), kustutamine, kreeditarved, ostuarved, maksed ning maksu/dimensiooni/artikli kirjutused ei ole AI agentidele üldse eksponeeritud. Selline andmed, mida agent ise genereerib, on Merit'is hiljem parandada kallim kui käsitsi sisestada. Ostuarved ja maksed käivad läbi turvatud automatiseeritud müügi (nt Costpocket) või Merit'i enda kasutajaliidese. SDK (`merit-api` pakett) sisaldab endiselt kõiki meetodeid — piirang kehtib ainult MCP kihile.
 
 Kirjutavad tööriistad on kahe sammuga. Esimene `merit_write_*` kutse ei tee Merit'is muudatusi: see tagastab eelvaate, `confirmation_tool` nime ja unikaalse `confirmation_code` väärtuse. Pärast eelvaate ülevaatamist tuleb sama action'i ja samade argumentidega kutsuda vastavat `*_confirm` tööriista ning anda kaasa `confirmation_code` ja `confirmed=true`. Kood on seotud konkreetsete argumentidega ja seda ei saa kasutada teise muudatuse kinnitamiseks.
 

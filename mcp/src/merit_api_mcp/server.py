@@ -47,9 +47,11 @@ def build_mcp_server(
     instructions = (
         "Merit API MCP server with compact domain-based tools. "
         "Read tools cover master data, sales, purchases, financial data, inventory, and reports. "
-        "Write tools cover common customer, sales, purchase, and financial workflows. "
-        "Mutating operations require a preview call followed by the matching *_confirm tool with "
-        "confirmation_code and confirmed=true."
+        "Write surface is intentionally minimal: customer create/update and draft sales invoice "
+        "preparation only. Mutating operations require a preview call followed by the matching "
+        "*_confirm tool with confirmation_code and confirmed=true. Delivery, deletion, credit "
+        "invoices, purchase invoices, and payments are not exposed; handle them manually in Merit "
+        "or via a dedicated guarded integration such as Costpocket."
     )
     mcp = FastMCP("merit-api", instructions=instructions, version=_package_version())
 

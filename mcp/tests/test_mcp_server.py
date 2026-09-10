@@ -46,34 +46,6 @@ def _valid_sales_invoice_payload():
     }
 
 
-def _valid_purchase_invoice_payload():
-    return {
-        "Vendor": {"Id": "ven-1", "Name": "Vendor"},
-        "DocDate": "20260510",
-        "TransactionDate": "20260510",
-        "DueDate": "20260520",
-        "BillNo": "INV-2026-001",
-        "CurrencyCode": "EUR",
-        "CurrencyRate": 1.0,
-        "InvoiceRow": [
-            {
-                "Item": {
-                    "Code": "SVC01",
-                    "Description": "Consulting services",
-                    "UOMName": "tk",
-                    "TaxId": "tax-1",
-                },
-                "Quantity": 1,
-                "Price": 100,
-                "TaxId": "tax-1",
-                "GLAccountCode": "4017",
-            }
-        ],
-        "TaxAmount": [{"TaxId": "tax-1", "Amount": 0}],
-        "TotalAmount": 100,
-    }
-
-
 async def _preview_and_confirm(server, tool_name, arguments):
     preview = await server.call_tool(tool_name, arguments)
     preview_payload = preview.structured_content
@@ -118,10 +90,6 @@ def test_mcp_registry_exposes_consolidated_tool_names_with_stable_annotations():
             "merit_write_customers_confirm",
             "merit_write_sales",
             "merit_write_sales_confirm",
-            "merit_write_purchases",
-            "merit_write_purchases_confirm",
-            "merit_write_financial",
-            "merit_write_financial_confirm",
         ]
 
         by_name = {tool.name: tool for tool in tools}
@@ -442,29 +410,6 @@ def test_write_payload_accepts_json_string_from_bridge():
     asyncio.run(scenario())
 
 
-def test_write_payload_json_string_list_is_parsed_to_list():
-    async def scenario():
-        session = Mock()
-        session.post.return_value = _mock_response(status_code=200, payload=[{"Id": "item-1"}])
-        client = MeritAPI("api-id", "api-key", session=session)
-        server = build_mcp_server(
-            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
-            client_factory=lambda _: client,
-        )
-
-        result = await _preview_and_confirm(
-            server,
-            "merit_write_financial",
-            {"action": "items_add", "payload": json.dumps([{"Code": "A1"}])},
-        )
-
-        assert json.loads(result.content[0].text) == [{"Id": "item-1"}]
-        sent_body = json.loads(session.post.call_args.kwargs["data"].decode("utf-8"))
-        assert sent_body == [{"Code": "A1"}]
-
-    asyncio.run(scenario())
-
-
 def test_payload_invalid_json_string_returns_structured_error():
     async def scenario():
         session = Mock()
@@ -509,100 +454,62 @@ def test_connected_mode_write_customers_routes_customer_upsert():
     asyncio.run(scenario())
 
 
-def test_connected_mode_write_customers_routes_vendor_update():
+def test_removed_write_actions_are_not_available():
+    """The write surface is intentionally minimal: preparation only.
+
+    Purchase invoices, payments, taxes, dimensions, items, credit invoices,
+    invoice deletion, and delivery (email/e-invoice) must stay unexposed so
+    agents cannot write ledger data that is costly to correct later.
+    """
+
     async def scenario():
-        session = Mock()
-        session.post.return_value = _mock_response(status_code=200, payload={"Id": "vend-1"})
-        client = MeritAPI("api-id", "api-key", session=session)
-        server = build_mcp_server(
-            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
-            client_factory=lambda _: client,
-        )
+        server = build_mcp_server(env={})
+        tools = {tool.name: tool for tool in await server.list_tools()}
 
-        result = await _preview_and_confirm(
-            server,
-            "merit_write_customers",
-            {
-                "action": "vendor_update",
-                "payload": {
-                    "Id": "vend-1",
-                    "BankAccount": "EE382200221020145685",
-                    "SWIFT_BIC": "HABAEE2X",
-                },
-            },
-        )
+        # The purchases and financial write tools are gone entirely.
+        assert "merit_write_purchases" not in tools
+        assert "merit_write_purchases_confirm" not in tools
+        assert "merit_write_financial" not in tools
+        assert "merit_write_financial_confirm" not in tools
 
-        assert result.structured_content == {"Id": "vend-1"}
-        assert session.post.call_args.args[0].endswith("/v2/updatevendor")
-        sent_body = json.loads(session.post.call_args.kwargs["data"].decode())
-        assert sent_body["BankAccount"] == "EE382200221020145685"
+        # The remaining write tools keep only the preparation actions.
+        assert tools["merit_write_customers"].meta["actions"] == ["customer_upsert"]
+        assert tools["merit_write_sales"].meta["actions"] == ["sales_invoice_create"]
+
+        catalog = json.loads((await server.read_resource("merit://tools/catalog")).contents[0].content)
+        for action in (
+            "vendor_upsert",
+            "vendor_update",
+            "sales_invoice_delete",
+            "credit_invoice_create",
+            "sales_invoice_send_email",
+            "sales_invoice_send_einvoice",
+            "purchase_invoice_create",
+            "purchase_invoice_payment_create",
+            "tax_upsert",
+            "dimensions_add",
+            "items_add",
+            "item_update",
+        ):
+            assert action not in [a["name"] for tool in catalog["tools"] for a in tool["actions"]]
 
     asyncio.run(scenario())
 
 
-def test_connected_mode_write_purchases_routes_purchase_invoice_create():
+def test_removed_write_action_returns_validation_error_in_connected_mode():
     async def scenario():
         session = Mock()
-        session.post.return_value = _mock_response(status_code=200, payload={"BillId": "bill-1"})
         client = MeritAPI("api-id", "api-key", session=session)
         server = build_mcp_server(
             config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
             client_factory=lambda _: client,
         )
 
-        result = await _preview_and_confirm(
-            server,
-            "merit_write_purchases",
-            {"action": "purchase_invoice_create", "payload": _valid_purchase_invoice_payload()},
-        )
+        result = await server.call_tool("merit_write_sales", {"action": "sales_invoice_send_email", "id": "inv-7"})
 
-        assert result.structured_content == {"BillId": "bill-1"}
-        assert session.post.call_args.args[0].endswith("/v1/sendpurchinvoice")
-
-    asyncio.run(scenario())
-
-
-def test_connected_mode_write_financial_routes_item_update():
-    async def scenario():
-        session = Mock()
-        session.post.return_value = _mock_response(status_code=200, payload={"Id": "item-1"})
-        client = MeritAPI("api-id", "api-key", session=session)
-        server = build_mcp_server(
-            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
-            client_factory=lambda _: client,
-        )
-
-        result = await _preview_and_confirm(
-            server,
-            "merit_write_financial",
-            {"action": "item_update", "payload": {"Id": "item-1", "Code": "A1"}},
-        )
-
-        assert result.structured_content == {"Id": "item-1"}
-        assert session.post.call_args.args[0].endswith("/v1/updateitem")
-
-    asyncio.run(scenario())
-
-
-def test_connected_mode_write_sales_routes_send_email_with_delivnote():
-    async def scenario():
-        session = Mock()
-        session.post.return_value = _mock_response(status_code=200, payload={"Message": "OK"})
-        client = MeritAPI("api-id", "api-key", session=session)
-        server = build_mcp_server(
-            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
-            client_factory=lambda _: client,
-        )
-
-        result = await _preview_and_confirm(
-            server,
-            "merit_write_sales",
-            {"action": "sales_invoice_send_email", "id": "inv-7", "delivnote": True},
-        )
-
-        assert result.structured_content == {"Message": "OK"}
-        payload = json.loads(session.post.call_args.kwargs["data"].decode("utf-8"))
-        assert payload == {"Id": "inv-7", "DelivNote": True}
+        assert result.structured_content["error"] == "ValidationError"
+        assert result.structured_content["allowed_actions"] == ["sales_invoice_create"]
+        assert session.post.call_count == 0
 
     asyncio.run(scenario())
 
@@ -618,12 +525,12 @@ def test_write_tool_preview_does_not_call_sdk_method():
 
         result = await server.call_tool(
             "merit_write_sales",
-            {"action": "sales_invoice_delete", "id": "inv-7"},
+            {"action": "sales_invoice_create", "payload": _valid_sales_invoice_payload()},
         )
 
         assert result.structured_content["mode"] == "preview"
         assert result.structured_content["confirmation_tool"] == "merit_write_sales_confirm"
-        assert result.structured_content["intended_operation"]["api_method"] == "sales.delete_invoice"
+        assert result.structured_content["intended_operation"]["api_method"] == "sales.send_invoice"
         assert session.post.call_count == 0
 
     asyncio.run(scenario())
@@ -640,7 +547,7 @@ def test_confirm_tool_without_confirmed_true_only_returns_preview():
 
         result = await server.call_tool(
             "merit_write_sales_confirm",
-            {"action": "sales_invoice_delete", "id": "inv-7"},
+            {"action": "sales_invoice_create", "payload": _valid_sales_invoice_payload()},
         )
 
         assert result.structured_content["mode"] == "preview"
@@ -660,13 +567,15 @@ def test_confirmation_code_is_bound_to_exact_write_arguments():
 
         preview = await server.call_tool(
             "merit_write_sales",
-            {"action": "sales_invoice_delete", "id": "inv-7"},
+            {"action": "sales_invoice_create", "payload": _valid_sales_invoice_payload()},
         )
+        tampered_payload = _valid_sales_invoice_payload()
+        tampered_payload["InvoiceNo"] = "99999"
         result = await server.call_tool(
             "merit_write_sales_confirm",
             {
-                "action": "sales_invoice_delete",
-                "id": "inv-8",
+                "action": "sales_invoice_create",
+                "payload": tampered_payload,
                 "confirmation_code": preview.structured_content["confirmation_code"],
                 "confirmed": True,
             },
@@ -714,233 +623,6 @@ def test_missing_required_field_returns_structured_validation_error():
     asyncio.run(scenario())
 
 
-def test_connected_mode_write_financial_routes_payment_create_eur_uses_v1():
-    async def scenario():
-        session = Mock()
-        session.post.return_value = _mock_response(status_code=200, payload={"InvoiceId": "pay-1"})
-        client = MeritAPI("api-id", "api-key", session=session)
-        server = build_mcp_server(
-            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
-            client_factory=lambda _: client,
-        )
-
-        result = await _preview_and_confirm(
-            server,
-            "merit_write_financial",
-            {
-                "action": "purchase_invoice_payment_create",
-                "payload": {
-                    "BankId": "bank-guid-1",
-                    "VendorName": "Acme Inc",
-                    "PaymentDate": "20260417",
-                    "BillNo": "S260214",
-                    "Amount": 0.01,
-                    "IBAN": "EE382200221020145685",
-                },
-            },
-        )
-
-        assert result.structured_content == {"InvoiceId": "pay-1"}
-        assert session.post.call_args.args[0].endswith("/v1/sendPaymentV")
-
-    asyncio.run(scenario())
-
-
-def test_connected_mode_write_financial_routes_payment_create_foreign_currency_uses_v2():
-    async def scenario():
-        session = Mock()
-        session.post.return_value = _mock_response(status_code=200, payload={"InvoiceId": "pay-2"})
-        client = MeritAPI("api-id", "api-key", session=session)
-        server = build_mcp_server(
-            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
-            client_factory=lambda _: client,
-        )
-
-        result = await _preview_and_confirm(
-            server,
-            "merit_write_financial",
-            {
-                "action": "purchase_invoice_payment_create",
-                "payload": {
-                    "BankId": "bank-guid-2",
-                    "VendorName": "Acme Inc",
-                    "PaymentDate": "20260417",
-                    "BillNo": "USD-001",
-                    "Amount": 5.00,
-                    "IBAN": "EE382200221020145685",
-                    "CurrencyCode": "USD",
-                    "CurrencyRate": 0.92,
-                },
-            },
-        )
-
-        assert result.structured_content == {"InvoiceId": "pay-2"}
-        assert session.post.call_args.args[0].endswith("/v2/sendPaymentV")
-
-    asyncio.run(scenario())
-
-
-def test_connected_mode_write_financial_payment_create_auto_fetches_iban_from_vendor():
-    async def scenario():
-        def post_side_effect(url, **_):
-            if "getvendors" in url:
-                return _mock_response(
-                    status_code=200,
-                    payload=[{"Name": "Acme Inc", "BankAccount": "EE382200221020145685"}],
-                )
-            return _mock_response(status_code=200, payload={"InvoiceId": "pay-3"})
-
-        session = Mock()
-        session.post.side_effect = post_side_effect
-        client = MeritAPI("api-id", "api-key", session=session)
-        server = build_mcp_server(
-            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
-            client_factory=lambda _: client,
-        )
-
-        result = await _preview_and_confirm(
-            server,
-            "merit_write_financial",
-            {
-                "action": "purchase_invoice_payment_create",
-                "payload": {
-                    "BankId": "bank-guid-1",
-                    "VendorName": "Acme Inc",
-                    "PaymentDate": "20260417",
-                    "BillNo": "S260214",
-                    "Amount": 0.01,
-                },
-            },
-        )
-
-        assert result.structured_content == {"InvoiceId": "pay-3"}
-        payment_call = session.post.call_args
-        assert payment_call.args[0].endswith("/v1/sendPaymentV")
-        sent_body = json.loads(payment_call.kwargs["data"].decode())
-        assert sent_body["IBAN"] == "EE382200221020145685"
-
-    asyncio.run(scenario())
-
-
-def test_connected_mode_write_financial_payment_create_raises_when_iban_not_found():
-    async def scenario():
-        session = Mock()
-        session.post.return_value = _mock_response(
-            status_code=200,
-            payload=[{"Name": "Acme Inc"}],
-        )
-        client = MeritAPI("api-id", "api-key", session=session)
-        server = build_mcp_server(
-            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
-            client_factory=lambda _: client,
-        )
-
-        result = await _preview_and_confirm(
-            server,
-            "merit_write_financial",
-            {
-                "action": "purchase_invoice_payment_create",
-                "payload": {
-                    "BankId": "bank-guid-1",
-                    "VendorName": "Acme Inc",
-                    "PaymentDate": "20260417",
-                    "BillNo": "S260214",
-                    "Amount": 0.01,
-                },
-            },
-        )
-
-        assert "IBAN" in str(result.structured_content)
-        assert "Acme Inc" in str(result.structured_content)
-
-    asyncio.run(scenario())
-
-
-def test_connected_mode_write_financial_payment_create_auto_resolves_payment_date_from_invoice():
-    async def scenario():
-        def post_side_effect(url, **_):
-            if "getvendors" in url:
-                return _mock_response(
-                    status_code=200,
-                    payload=[{"Name": "Acme Inc", "BankAccount": "EE382200221020145685"}],
-                )
-            if "getpurchorders" in url:
-                return _mock_response(
-                    status_code=200,
-                    payload=[{"BillNo": "S260214", "DueDate": "20260430"}],
-                )
-            return _mock_response(status_code=200, payload={"InvoiceId": "pay-4", "InvoiceNo": "34", "RefNo": ""})
-
-        session = Mock()
-        session.post.side_effect = post_side_effect
-        client = MeritAPI("api-id", "api-key", session=session)
-        server = build_mcp_server(
-            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
-            client_factory=lambda _: client,
-        )
-
-        result = await _preview_and_confirm(
-            server,
-            "merit_write_financial",
-            {
-                "action": "purchase_invoice_payment_create",
-                "payload": {
-                    "BankId": "bank-guid-1",
-                    "VendorName": "Acme Inc",
-                    "BillNo": "S260214",
-                    "Amount": 0.01,
-                    # PaymentDate intentionally omitted — should be resolved from DueDate
-                },
-            },
-        )
-
-        assert result.structured_content == {"InvoiceId": "pay-4", "InvoiceNo": "34", "RefNo": ""}
-        sent_body = json.loads(session.post.call_args.kwargs["data"].decode())
-        assert sent_body["PaymentDate"] == "20260430"
-        assert sent_body["IBAN"] == "EE382200221020145685"
-
-    asyncio.run(scenario())
-
-
-def test_connected_mode_write_financial_payment_create_raises_when_payment_date_not_resolvable():
-    async def scenario():
-        def post_side_effect(url, **_):
-            if "getvendors" in url:
-                return _mock_response(
-                    status_code=200,
-                    payload=[{"Name": "Acme Inc", "BankAccount": "EE382200221020145685"}],
-                )
-            # getpurchorders returns empty — invoice not found
-            return _mock_response(status_code=200, payload=[])
-
-        session = Mock()
-        session.post.side_effect = post_side_effect
-        client = MeritAPI("api-id", "api-key", session=session)
-        server = build_mcp_server(
-            config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
-            client_factory=lambda _: client,
-        )
-
-        result = await _preview_and_confirm(
-            server,
-            "merit_write_financial",
-            {
-                "action": "purchase_invoice_payment_create",
-                "payload": {
-                    "BankId": "bank-guid-1",
-                    "VendorName": "Acme Inc",
-                    "BillNo": "S260214",
-                    "Amount": 0.01,
-                },
-            },
-        )
-
-        assert result.structured_content.get("error") == "ValueError"
-        assert "PaymentDate" in result.structured_content.get("message", "")
-
-    asyncio.run(scenario())
-
-
 def test_mcp_resources_and_prompts_reference_consolidated_tools():
     async def scenario():
         server = build_mcp_server(env={})
@@ -980,13 +662,6 @@ def test_mcp_resources_and_prompts_reference_consolidated_tools():
         # instructs resolving them via taxes_list instead.
         assert "7e170b45-fe96-4048-b824-39733c33e734" not in sales_create["description"]
         assert "taxes_list" in sales_create["description"]
-        purchase_tool = next(tool for tool in catalog_payload["tools"] if tool["name"] == "merit_write_purchases")
-        purchase_create = next(
-            action for action in purchase_tool["actions"] if action["name"] == "purchase_invoice_create"
-        )
-        assert "GLAccountCode" in purchase_create["description"]
-        assert "taxes_list" in purchase_create["description"]
-        assert "7e170b45-fe96-4048-b824-39733c33e734" not in purchase_create["description"]
         assert "merit_read_master_data" in invoice_prompt.messages[0].content.text
         assert "merit_write_sales" in invoice_prompt.messages[0].content.text
         assert "InvoiceNo" in invoice_prompt.messages[0].content.text

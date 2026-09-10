@@ -11,6 +11,15 @@ Invoker = Callable[[Any, dict[str, Any]], Any]
 PayloadValidator = Callable[[Any], tuple[str, ...]]
 CONFIRM_TOOL_SUFFIX = "_confirm"
 
+MINIMAL_WRITE_POLICY = (
+    "This MCP server intentionally exposes a minimal write surface: customer create/update and "
+    "draft sales invoice preparation only. Purchase invoices, payments, taxes, dimensions, items, "
+    "credit invoices, invoice deletion, and invoice delivery (email/e-invoice) are deliberately not "
+    "exposed to AI agents; manage those in Merit's own UI or through a dedicated guarded integration "
+    "such as Costpocket. This prevents automatically generated data from entering ledgers where "
+    "correcting it later costs more than manual entry."
+)
+
 SALES_INVOICE_CREATE_DESCRIPTION = (
     "Create a draft sales invoice through Merit v1 /sendinvoice. The payload is passed through to Merit "
     "and must use the create schema, not the invoice_get response shape. Required shape: Customer.Id, "
@@ -26,27 +35,9 @@ SALES_INVOICE_CREATE_DESCRIPTION = (
     "merit_read_master_data action=taxes_list (e.g. for no-VAT match the entry named 'Ei ole käive' / "
     "NameEN 'Not included in Turnover'); never hardcode a tax GUID. "
     "Do not include DelivNote/delivnote=true in invoice creation payloads; invoices should remain undelivered "
-    "drafts and delivery is handled manually in Merit."
+    "drafts and delivery is handled manually in Merit. This server only prepares drafts: it cannot deliver, "
+    "delete, or credit invoices. " + MINIMAL_WRITE_POLICY
 )
-
-PURCHASE_INVOICE_CREATE_DESCRIPTION = (
-    "Create a purchase invoice through Merit v1 /sendpurchinvoice. The payload is passed through to Merit "
-    "and must use the create schema, not the invoice_get response shape. Required shape: Vendor (object with "
-    "Id AND Name — both are mandatory even for an existing vendor; find it with merit_read_master_data "
-    "action=vendors_list), DocDate, TransactionDate, and DueDate as YYYYMMDD strings, BillNo (the supplier's "
-    "bill number, string), CurrencyCode (usually EUR), CurrencyRate (usually 1.0), singular InvoiceRow list, "
-    "TaxAmount list, and TotalAmount. "
-    "Each InvoiceRow must use Item={Code, Description, UOMName, TaxId}, Quantity, Price, row-level TaxId GUID, "
-    "and GLAccountCode. Gotchas: use Vendor.{Id,Name}, not VendorId; use DocDate, not DocumentDate; use "
-    "InvoiceRow (singular); Description and UOMName live inside Item, not on the row; use GLAccountCode, not "
-    "AccountCode; use TaxId GUID, not TaxName/TaxPct/ArticleCode; TaxAmount is required even for zero VAT, "
-    "e.g. [{'TaxId': '<tax-guid>', 'Amount': 0}]; TotalAmount is required and should match the row "
-    "Price x Quantity total. TaxId GUIDs are company-specific: always resolve them with "
-    "merit_read_master_data action=taxes_list (e.g. for no-VAT match the entry named 'Ei ole käive' / "
-    "NameEN 'Not included in Turnover'); never hardcode a tax GUID. Optional Attachment is "
-    "{FileName, FileContent (base64 PDF)}. Sending the same Vendor + BillNo again is refused as a duplicate."
-)
-
 
 @dataclass(frozen=True)
 class ActionSpec:
@@ -359,114 +350,6 @@ def _sales_invoice_create_payload_errors(payload: Any) -> tuple[str, ...]:
     return tuple(errors)
 
 
-def _purchase_invoice_create_payload_errors(payload: Any) -> tuple[str, ...]:
-    if not isinstance(payload, dict):
-        return ()
-
-    errors: list[str] = []
-
-    if "Lines" in payload:
-        errors.append("Do not copy invoice_get Lines into create payloads; use create-only InvoiceRow rows.")
-    if "InvoiceRows" in payload:
-        errors.append(
-            "Use InvoiceRow (singular), not InvoiceRows. Merit may say 'InvoiceRows required', "
-            "but /sendpurchinvoice expects InvoiceRow."
-        )
-    if "VendorId" in payload:
-        errors.append("Use Vendor={'Id': '<vendor-guid>', 'Name': '<vendor name>'}, not a top-level VendorId.")
-    if "DocumentDate" in payload:
-        errors.append("Use DocDate (YYYYMMDD), not DocumentDate.")
-
-    required_top_fields = (
-        "Vendor",
-        "DocDate",
-        "TransactionDate",
-        "DueDate",
-        "BillNo",
-        "CurrencyCode",
-        "InvoiceRow",
-        "TaxAmount",
-        "TotalAmount",
-    )
-    missing_top_fields = [field for field in required_top_fields if field not in payload or _is_blank(payload[field])]
-    if missing_top_fields:
-        errors.append("Missing required top-level purchase invoice fields: " + ", ".join(missing_top_fields) + ".")
-
-    vendor = payload.get("Vendor")
-    if isinstance(vendor, dict):
-        for vendor_field in ("Id", "Name"):
-            if _is_blank(vendor.get(vendor_field)):
-                errors.append(
-                    f"Vendor.{vendor_field} is required for purchase_invoice_create (both Id and Name are "
-                    "mandatory even for an existing vendor); find it with merit_read_master_data "
-                    "action=vendors_list."
-                )
-    elif "Vendor" in payload:
-        errors.append("Vendor must be an object such as {'Id': '<vendor-guid>', 'Name': '<vendor name>'}.")
-
-    bill_no = payload.get("BillNo")
-    if "BillNo" in payload and not isinstance(bill_no, str):
-        errors.append("BillNo must be a string (the supplier's bill number).")
-
-    for date_field in ("DocDate", "TransactionDate", "DueDate"):
-        if date_field in payload:
-            date_error = _validate_yyyymmdd(payload, date_field)
-            if date_error:
-                errors.append(date_error)
-
-    rows = payload.get("InvoiceRow")
-    row_field_name = "InvoiceRow"
-    if not isinstance(rows, list) and isinstance(payload.get("InvoiceRows"), list):
-        rows = payload["InvoiceRows"]
-        row_field_name = "InvoiceRows"
-    if "InvoiceRow" in payload and (not isinstance(rows, list) or not rows):
-        errors.append("InvoiceRow must be a non-empty list of purchase invoice rows.")
-    elif isinstance(rows, list):
-        for row_index, row in enumerate(rows):
-            row_path = f"{row_field_name}[{row_index}]"
-            if not isinstance(row, dict):
-                errors.append(f"{row_path} must be an object.")
-                continue
-
-            if "UOMName" in row:
-                errors.append(f"{row_path}.UOMName is invalid at row level; put UOMName inside {row_path}.Item.")
-            if "AccountCode" in row:
-                errors.append(f"{row_path}.AccountCode is invalid for /sendpurchinvoice; use {row_path}.GLAccountCode.")
-            if "ArticleCode" in row:
-                errors.append(
-                    f"{row_path}.ArticleCode is invalid; put the item code in {row_path}.Item.Code instead."
-                )
-            if "TaxName" in row or "TaxPct" in row:
-                errors.append(f"{row_path} must use TaxId GUID, not TaxName or TaxPct.")
-
-            for field_name in ("Quantity", "Price", "TaxId", "GLAccountCode"):
-                if field_name not in row or _is_blank(row[field_name]):
-                    errors.append(f"{row_path}.{field_name} is required.")
-
-            item = row.get("Item")
-            if not isinstance(item, dict):
-                errors.append(f"{row_path}.Item must be an object with Code, Description, UOMName, and TaxId.")
-                continue
-            for item_field in ("Code", "Description", "UOMName", "TaxId"):
-                if item_field not in item or _is_blank(item[item_field]):
-                    errors.append(f"{row_path}.Item.{item_field} is required.")
-
-    tax_amount = payload.get("TaxAmount")
-    if "TaxAmount" in payload and (not isinstance(tax_amount, list) or not tax_amount):
-        errors.append("TaxAmount must be a non-empty list, even when VAT amount is zero.")
-    elif isinstance(tax_amount, list):
-        for tax_index, tax_row in enumerate(tax_amount):
-            tax_path = f"TaxAmount[{tax_index}]"
-            if not isinstance(tax_row, dict):
-                errors.append(f"{tax_path} must be an object with TaxId and Amount.")
-                continue
-            for field_name in ("TaxId", "Amount"):
-                if field_name not in tax_row or _is_blank(tax_row[field_name]):
-                    errors.append(f"{tax_path}.{field_name} is required.")
-
-    return tuple(errors)
-
-
 def _action_map(spec: ToolSpec) -> dict[str, ActionSpec]:
     return {action.name: action for action in spec.actions}
 
@@ -732,20 +615,6 @@ def _read_report_actions() -> tuple[ActionSpec, ...]:
 def _write_customer_actions() -> tuple[ActionSpec, ...]:
     return (
         _payload_action("customer_upsert", "Create or update a customer.", "customers.send", lambda c: c.customers.send, payload_kind="dict"),
-        _payload_action("vendor_upsert", "Create or update a vendor.", "vendors.send", lambda c: c.vendors.send, payload_kind="dict"),
-        _payload_action(
-            "vendor_update",
-            "Update an existing vendor by Id. Only Id is required; all other fields are optional. "
-            "Typical use: after receiving a new purchase invoice (e.g. as PDF), verify and sync "
-            "the vendor's BankAccount (IBAN) and SWIFT_BIC so future payments require no manual lookup. "
-            "Payload fields: Id (guid, required), Name, CountryCode, Address, City, PostalCode, "
-            "PhoneNo, PhoneNo2, Email, RegNo, VatRegNo, SalesInvLang, VatAccountable, "
-            "BankAccount, ReferenceNo, VendGrCode, VendGrId, PayerReceiverName, "
-            "Dimensions ([{DimId, DimValueId, DimCode}]).",
-            "vendors.update",
-            lambda c: c.vendors.update,
-            payload_kind="dict",
-        ),
     )
 
 
@@ -759,73 +628,6 @@ def _write_sales_actions() -> tuple[ActionSpec, ...]:
             payload_kind="dict",
             validate_payload=_sales_invoice_create_payload_errors,
         ),
-        _id_action("sales_invoice_delete", "Delete a sales invoice by id.", "sales.delete_invoice", lambda c: c.sales.delete_invoice),
-        _payload_action(
-            "credit_invoice_create",
-            "Create a credit invoice.",
-            "sales.send_credit_invoice",
-            lambda c: c.sales.send_credit_invoice,
-            payload_kind="dict",
-        ),
-        ActionSpec(
-            name="sales_invoice_send_email",
-            description=(
-                "Send a sales invoice by email. This delivers the invoice; do not use it in the normal "
-                "draft creation flow where delivery is handled manually in Merit. Keep delivnote=false unless "
-                "the user explicitly asks for delivery note mode without prices."
-            ),
-            api_method="sales.send_invoice_by_email",
-            invoke=lambda client, args: client.sales.send_invoice_by_email(args["id"], delivnote=args["delivnote"]),
-            required_fields=("id",),
-        ),
-        ActionSpec(
-            name="sales_invoice_send_einvoice",
-            description=(
-                "Send a sales invoice as e-invoice. This delivers the invoice; do not use it in the normal "
-                "draft creation flow where delivery is handled manually in Merit. Keep delivnote=false unless "
-                "the user explicitly asks for delivery note mode without prices."
-            ),
-            api_method="sales.send_invoice_by_einvoice",
-            invoke=lambda client, args: client.sales.send_invoice_by_einvoice(args["id"], delivnote=args["delivnote"]),
-            required_fields=("id",),
-        ),
-    )
-
-
-def _write_purchase_actions() -> tuple[ActionSpec, ...]:
-    return (
-        _payload_action(
-            "purchase_invoice_create",
-            PURCHASE_INVOICE_CREATE_DESCRIPTION,
-            "purchases.send_invoice",
-            lambda c: c.purchases.send_invoice,
-            payload_kind="dict",
-            validate_payload=_purchase_invoice_create_payload_errors,
-        ),
-    )
-
-
-def _write_financial_actions() -> tuple[ActionSpec, ...]:
-    return (
-        _payload_action(
-            "purchase_invoice_payment_create",
-            "Create a payment for a purchase invoice. "
-            "Payload fields: BankId (guid, required), VendorName (str, required), "
-            "BillNo (invoice number, required), Amount (decimal, required), "
-            "IBAN (str, auto-fetched from vendor BankAccount if omitted), "
-            "PaymentDate (YYYYMMDD, defaults to invoice DueDate if omitted), "
-            "CurrencyCode (str, only for non-EUR payments). "
-            "Uses v1/sendPaymentV for EUR; v2/sendPaymentV when CurrencyCode is present. "
-            "Returns the raw Merit API response. "
-            "Raises error if IBAN or PaymentDate cannot be resolved automatically.",
-            "financial.create_payment",
-            lambda c: c.financial.create_payment,
-            payload_kind="dict",
-        ),
-        _payload_action("tax_upsert", "Create or update a tax rate.", "taxes.send", lambda c: c.taxes.send, payload_kind="dict"),
-        _payload_action("dimensions_add", "Add dimensions.", "dimensions.add", lambda c: c.dimensions.add, payload_kind="list"),
-        _payload_action("items_add", "Add items.", "items.add", lambda c: c.items.add, payload_kind="list"),
-        _payload_action("item_update", "Update an item.", "items.update", lambda c: c.items.update, payload_kind="dict"),
     )
 
 
@@ -836,10 +638,14 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("merit_read_financial", "Read payments, banks, and GL information.", False, _read_financial_actions()),
     ToolSpec("merit_read_inventory", "Read inventory, fixed asset, and pricing data.", False, _read_inventory_actions()),
     ToolSpec("merit_read_reports", "Read Merit reports and report continuations.", False, _read_report_actions()),
-    ToolSpec("merit_write_customers", "Create or update customers and vendors.", True, _write_customer_actions()),
-    ToolSpec("merit_write_sales", "Create, delete, and deliver sales invoices.", True, _write_sales_actions()),
-    ToolSpec("merit_write_purchases", "Create purchase invoices.", True, _write_purchase_actions()),
-    ToolSpec("merit_write_financial", "Create purchase payments and update related financial master data.", True, _write_financial_actions()),
+    ToolSpec("merit_write_customers", "Create or update customers.", True, _write_customer_actions()),
+    ToolSpec(
+        "merit_write_sales",
+        "Prepare draft sales invoices. Creation only: delivery (email/e-invoice), deletion, and credit "
+        "invoices are handled manually in Merit and are not exposed by this server.",
+        True,
+        _write_sales_actions(),
+    ),
 )
 
 

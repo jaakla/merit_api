@@ -60,6 +60,8 @@ Built on **FastMCP**. The server exposes Merit's many endpoints via ~15 consolid
 
 **Write tools use a preview/confirm pattern**: calling `merit_write_sales` returns a preview and a `confirmation_code`; no data is written. Calling `merit_write_sales_confirm` with that code and `confirmed=true` executes the write. The `confirmation_store` is an in-process dict keyed by a hash of `(action, arguments)`, so codes are tied to specific arguments and cannot be reused for different payloads.
 
+**Minimal write surface**: the MCP layer exposes only two write tools — `merit_write_customers` (`customer_upsert`) and `merit_write_sales` (`sales_invoice_create`, draft preparation only). Delivery, deletion, credit invoices, purchase invoices, payments, and master-data writes are deliberately not exposed as MCP actions (agents auto-confirming writes can generate ledger data that is costlier to fix than to enter manually). The SDK keeps the full method set; when adding a new MCP write action, justify it against this policy.
+
 `config.py` — Loads `MERIT_API_ID`, `MERIT_API_KEY`, `MERIT_API_COUNTRY` from environment. Falls back to `~/.env` via python-dotenv in dev. Returns `None` (setup mode) when credentials are absent.
 
 ## Adding New API Endpoints
