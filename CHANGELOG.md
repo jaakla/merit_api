@@ -5,7 +5,10 @@ All notable changes to merit_api project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-09-10
+
+> Lockstep release: both packages move to 0.6.0. The `merit-api` SDK has no
+> code changes in this cycle — the release is driven by the MCP layer.
 
 ### Changed
 
