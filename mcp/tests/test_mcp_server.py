@@ -21,7 +21,7 @@ def _mock_response(status_code=200, payload=None, text=""):
 
 def _valid_sales_invoice_payload():
     return {
-        "Customer": {"Id": "cust-1"},
+        "Customer": {"Id": "11111111-1111-4111-8111-111111111111"},
         "DocDate": "20260510",
         "TransactionDate": "20260510",
         "DueDate": "20260520",
@@ -37,11 +37,11 @@ def _valid_sales_invoice_payload():
                 },
                 "Quantity": 1,
                 "Price": 100,
-                "TaxId": "tax-1",
+                "TaxId": "22222222-2222-4222-8222-222222222222",
                 "Account": "30001",
             }
         ],
-        "TaxAmount": [{"TaxId": "tax-1", "Amount": 0}],
+        "TaxAmount": [{"TaxId": "22222222-2222-4222-8222-222222222222", "Amount": 0}],
         "TotalAmount": 100,
     }
 
@@ -298,7 +298,10 @@ def test_connected_mode_read_reports_routes_profit_report():
 def test_connected_mode_write_sales_routes_invoice_create():
     async def scenario():
         session = Mock()
-        session.post.return_value = _mock_response(status_code=200, payload={"Id": "inv-1", "Status": "Created"})
+        session.post.side_effect = [
+            _mock_response(payload=[{"Code": "SVC01", "Type0": 2}]),
+            _mock_response(payload={"Id": "inv-1", "Status": "Created"}),
+        ]
         client = MeritAPI("api-id", "api-key", session=session)
         server = build_mcp_server(
             config=MeritMCPConfig(api_id="api-id", api_key="api-key"),
@@ -344,6 +347,8 @@ def test_write_sales_invoice_create_rejects_get_response_shape_before_preview():
             ],
             "TotalAmount": 100,
         }
+
+        invalid_payload["InvoiceRow"] = invalid_payload["InvoiceRows"]
 
         result = await server.call_tool(
             "merit_write_sales",

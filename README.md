@@ -7,7 +7,7 @@
 [![MCP](https://img.shields.io/badge/MCP-server-purple.svg)](https://modelcontextprotocol.io)
 <a href="https://glama.ai/mcp/servers/jaakla/merit_api/score"><img src="https://glama.ai/mcp/servers/jaakla/merit_api/badge" alt="Glama score" width="140" /></a>
 
-> **English summary:** Unofficial MCP server and Python SDK for the [Merit Aktiva](https://aktiva.merit.ee) accounting REST API. Exposes 11 tools (6 read tools with 50 read actions, 2 preview/confirm write tools), 3 workflow prompts, and 2 resources to AI coding assistants (Claude Code, Cursor, Windsurf, Gemini CLI, etc.). The write surface is intentionally minimal — customer create/update and draft sales invoice preparation only; delivery (email/e-invoice), deletion, credit invoices, purchase invoices, and payments are deliberately not exposed so agents cannot generate ledger data that is costly to correct later. Full read access to accounting data, write operations gated behind a two-step preview/confirm flow. Requires a Merit Aktiva Premium account and API credentials (`MERIT_API_ID`, `MERIT_API_KEY`). Run/install instantly via `uvx`. **Experimental and unofficial — use at your own risk.**
+> **English summary:** Unofficial MCP server and Python SDK for the [Merit Aktiva](https://aktiva.merit.ee) accounting REST API. Exposes 11 tools (6 read tools with 50 read actions, 2 preview/confirm write tools), 3 workflow prompts, and 2 resources to AI coding assistants (Claude Code, Cursor, Windsurf, Gemini CLI, etc.). The write surface is intentionally minimal — customer create/update and restricted unsent sales invoice creation only. Confirmation creates a real accounting invoice that can affect the ledger before delivery—not an unposted draft. Payments, credit forms, item-creation fields, delivery flags, and other unsupported fields are rejected. Full read access to accounting data, write operations gated behind a two-step preview/confirm flow. Requires a Merit Aktiva Premium account and API credentials (`MERIT_API_ID`, `MERIT_API_KEY`). Run/install instantly via `uvx`. **Experimental and unofficial — use at your own risk.**
 
 ---
 
@@ -160,9 +160,22 @@ Lugemise, Read-only tööriistad:
 Muutmise/kirjutamise tööriistad toimivad kahe käsuna, et vältida vigaste andmete sisestust:
 
 - `merit_write_customers` (eelvaade) ja `merit_write_customers_confirm` (kinnitatud muutmine) — ainult `customer_upsert`
-- `merit_write_sales` (eelvaate) ja `merit_write_sales_confirm` (kinnitatud muutmine) — ainult `sales_invoice_create` (mustand)
+- `merit_write_sales` (eelvaade) ja `merit_write_sales_confirm` (kinnitatud muutmine) — ainult `sales_invoice_create` (saatmata raamatupidamisarve, mitte konteerimata mustand)
 
-**Kirjutamispind on tahtlikult minimaalne.** Müügiarve saatmine (email/e-arve), kustutamine, kreeditarved, ostuarved, maksed ning maksu/dimensiooni/artikli kirjutused ei ole AI agentidele üldse eksponeeritud. Selline andmed, mida agent ise genereerib, on Merit'is hiljem parandada kallim kui käsitsi sisestada. Ostuarved ja maksed käivad läbi turvatud automatiseeritud müügi (nt Costpocket) või Merit'i enda kasutajaliidese. SDK (`merit-api` pakett) sisaldab endiselt kõiki meetodeid — piirang kehtib ainult MCP kihile.
+**Kirjutamispind on tahtlikult minimaalne.** Müügiarve saatmine (e-post/e-arve), kustutamine, kreeditarved, ostuarved, maksed ning maksude, dimensioonide ja artiklite muutmine ei ole MCP kirjutamistoimingutena saadaval. Kuluarvete jaoks kasuta näiteks Costpocketi integratsiooni või Meriti kasutajaliidest. SDK (`merit-api` pakett) säilitab kõik meetodid; piirang kehtib MCP kihile.
+
+**Saatmata arve ei ole konteerimata mustand.** Eelvaade ei kirjuta midagi. `*_confirm` loob aga Meritis päris raamatupidamisarve, mis võib mõjutada pearaamatut ja aruandeid juba enne saatmist. Kontrolli andmeid enne kinnitamist. Kui vajad üksnes ilma raamatupidamismõjuta ettevalmistust, jää eelvaate juurde ja ära kinnita loomist.
+
+### Restricted sales-invoice profile
+
+- EUR and VAT-exclusive prices (`PriceInclVat=false`) only.
+- Existing customer by GUID; existing non-stock items by exact code, checked again at confirmation. Missing, ambiguous, stock, and unrecognized item records are refused.
+- Positive quantities, non-negative prices/taxes, positive net total; valid calendar dates and cent-rounded row/total consistency.
+- Unknown fields are rejected at every level, including embedded `Payment`, `AccountingDoc`, `DelivNote`, `Item.Type`, discounts, and rounding adjustments. These restrictions also apply to JSON-string payloads and confirmation calls.
+- Item lookup is not an atomic reservation. The integration relies on Merit's documented requirement for `Item.Type` when adding an item; this field is never forwarded. Live API behavior and company-specific VAT/accounting rules still require verification.
+
+[Merit's create-invoice documentation](https://api.merit.ee/connecting-robots/reference-manual/sales-invoices/create-sales-invoice/) describes general-ledger records on invoice rows and does not document an unposted-draft mode for this endpoint. The MCP therefore promises an **unsent accounting invoice**, not a harmless saved draft. `DelivNote` is not treated as a draft-state switch.
+
 
 Kirjutavad tööriistad on kahe sammuga. Esimene `merit_write_*` kutse ei tee Merit'is muudatusi: see tagastab eelvaate, `confirmation_tool` nime ja unikaalse `confirmation_code` väärtuse. Pärast eelvaate ülevaatamist tuleb sama action'i ja samade argumentidega kutsuda vastavat `*_confirm` tööriista ning anda kaasa `confirmation_code` ja `confirmed=true`. Kood on seotud konkreetsete argumentidega ja seda ei saa kasutada teise muudatuse kinnitamiseks.
 

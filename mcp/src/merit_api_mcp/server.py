@@ -13,7 +13,7 @@ from .config import (
     load_config_from_env,
 )
 from .prompts import register_prompts
-from .registry import build_tool_handler, get_tool_specs
+from .registry import MINIMAL_WRITE_POLICY, build_tool_handler, get_tool_specs
 from .resources import register_resources
 
 
@@ -47,11 +47,8 @@ def build_mcp_server(
     instructions = (
         "Merit API MCP server with compact domain-based tools. "
         "Read tools cover master data, sales, purchases, financial data, inventory, and reports. "
-        "Write surface is intentionally minimal: customer create/update and draft sales invoice "
-        "preparation only. Mutating operations require a preview call followed by the matching "
-        "*_confirm tool with confirmation_code and confirmed=true. Delivery, deletion, credit "
-        "invoices, purchase invoices, and payments are not exposed; handle them manually in Merit "
-        "or via a dedicated guarded integration such as Costpocket."
+        "The remaining writes use preview/confirm. An agent can call both steps; this is not "
+        "proof of human approval. " + MINIMAL_WRITE_POLICY
     )
     mcp = FastMCP("merit-api", instructions=instructions, version=_package_version())
 

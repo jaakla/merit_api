@@ -58,9 +58,9 @@ Built on **FastMCP**. The server exposes Merit's many endpoints via ~15 consolid
 - `ActionSpec`: one Merit API action (e.g. `customers_list`), including its invoker function and required field validation.
 - `ToolSpec`: a group of related actions exposed as a single MCP tool (e.g. `merit_read_master_data`).
 
-**Write tools use a preview/confirm pattern**: calling `merit_write_sales` returns a preview and a `confirmation_code`; no data is written. Calling `merit_write_sales_confirm` with that code and `confirmed=true` executes the write. The `confirmation_store` is an in-process dict keyed by a hash of `(action, arguments)`, so codes are tied to specific arguments and cannot be reused for different payloads.
+**Write tools use a preview/confirm pattern**: calling `merit_write_sales` returns a preview and a `confirmation_code`; no data is written. Calling `merit_write_sales_confirm` with that code and `confirmed=true` executes the write. The `confirmation_store` is an in-process dict keyed by a hash of `(action, arguments)`, so codes are tied to specific arguments and cannot be reused for different payloads. Both steps are agent-accessible, so this is not proof of human approval.
 
-**Minimal write surface**: the MCP layer exposes only two write tools — `merit_write_customers` (`customer_upsert`) and `merit_write_sales` (`sales_invoice_create`, draft preparation only). Delivery, deletion, credit invoices, purchase invoices, payments, and master-data writes are deliberately not exposed as MCP actions (agents auto-confirming writes can generate ledger data that is costlier to fix than to enter manually). The SDK keeps the full method set; when adding a new MCP write action, justify it against this policy.
+**Minimal write surface**: the MCP layer exposes only two write tools — `merit_write_customers` (`customer_upsert`) and `merit_write_sales` (`sales_invoice_create`, restricted unsent accounting invoices—not unposted drafts). Delivery, deletion, credit invoices, purchase invoices, payments, and master-data writes are deliberately not exposed as MCP actions (agents auto-confirming writes can generate ledger data that is costlier to fix than to enter manually). The SDK keeps the full method set; when adding a new MCP write action, justify it against this policy.
 
 `config.py` — Loads `MERIT_API_ID`, `MERIT_API_KEY`, `MERIT_API_COUNTRY` from environment. Falls back to `~/.env` via python-dotenv in dev. Returns `None` (setup mode) when credentials are absent.
 
@@ -78,7 +78,8 @@ The `SALES_INVOICE_CREATE_DESCRIPTION` constant in `registry.py:16` documents se
 - `UOMName` goes inside `Item`, not on the row directly.
 - Use `Account`, not `AccountCode`.
 - `TaxId` must be a GUID; `TaxAmount` is required even for zero-VAT rows.
-- Do not set `DelivNote=true` on creation; leave invoices as undelivered drafts.
+- The MCP rejects all `DelivNote` fields; this is not a draft-state flag. Confirmation creates an unsent accounting invoice and can affect the ledger before delivery.
+- `sales_policy.py` enforces the restricted MCP payload (including on confirmation): EUR/net prices, finite non-negative amounts, no credit/payment/unknown fields, valid dates and totals, existing non-stock items checked at execution. Keep these safeguards at the MCP boundary; the SDK remains general-purpose.
 
 ## Environment Variables
 

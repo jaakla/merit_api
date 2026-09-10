@@ -5,17 +5,36 @@ All notable changes to merit_api project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
 ## [0.6.0] - 2026-09-10
 
 > Lockstep release: both packages move to 0.6.0. The `merit-api` SDK has no
 > code changes in this cycle — the release is driven by the MCP layer.
+
+### Fixed
+
+- Restrict `sales_invoice_create` payloads at the MCP boundary, not only tool
+  names: reject embedded payments, credit forms/negative rows, unknown fields,
+  delivery flags, and item-creation fields. Check existing non-stock item codes
+  again before execution; fail closed on missing, ambiguous, or unknown items.
+- Validate calendar dates, numeric types/finiteness, and cent-rounded net totals.
+  The intentionally small profile supports EUR and VAT-exclusive prices only.
+- Replace the misleading "draft" promise: confirmation creates a real, unsent
+  accounting invoice that can affect the ledger before delivery. Only preview
+  is non-writing. Agent-accessible confirmation is not proof of human approval.
+- Add regressions for direct/JSON-string payloads, preview/confirmation, removed
+  capabilities inside allowed payloads, and execution-time item checks.
+- SDK behavior is unchanged. These fixes are included in the updated `v0.6.0`
+  tag and rebuilt distributions before the first PyPI publication.
 
 ### Changed
 
 - **Minimal write surface (MCP layer):** the server now exposes only two
   write tools — `merit_write_customers` with the single `customer_upsert`
   action, and `merit_write_sales` with the single `sales_invoice_create`
-  action (draft preparation). Removed MCP actions: `vendor_upsert`,
+  action (restricted unsent accounting invoice creation, not an unposted
+  draft). Removed MCP actions: `vendor_upsert`,
   `vendor_update`, `sales_invoice_delete`, `credit_invoice_create`,
   `sales_invoice_send_email`, `sales_invoice_send_einvoice`,
   `purchase_invoice_create`, `purchase_invoice_payment_create`, `tax_upsert`,

@@ -20,8 +20,8 @@ def register_prompts(mcp: FastMCP) -> None:
 
     @mcp.prompt(
         name="create-sales-invoice",
-        title="Create Sales Invoice",
-        description="Guide an assistant through creating a sales invoice with Merit API tools.",
+        title="Create Unsent Accounting Invoice",
+        description="Create an unsent accounting invoice (not an unposted draft); review before confirmation.",
     )
     def create_sales_invoice(invoice_summary: str = "Create a new sales invoice") -> str:
         return (
@@ -30,20 +30,22 @@ def register_prompts(mcp: FastMCP) -> None:
             "2. If needed, call merit_write_customers with action='customer_upsert' to preview the customer create/update.\n"
             "3. After the user reviews that preview, call merit_write_customers_confirm with the same arguments, "
             "the returned confirmation_code, and confirmed=true.\n"
-            "4. Read merit_read_sales with action='invoices_list' to find the latest InvoiceNo, then use the next "
-            "sequential integer as a string. Merit will not auto-assign InvoiceNo.\n"
-            "5. Build the invoice payload for v1 /sendinvoice, not from invoice_get shape: Customer.Id; "
-            "DocDate, TransactionDate, DueDate as YYYYMMDD strings; CurrencyCode; PriceInclVat; singular "
-            "InvoiceRow list; TaxAmount; TotalAmount.\n"
-            "6. For each InvoiceRow, put UOMName inside Item, use row-level TaxId GUID and Account, not "
-            "TaxName, TaxPct, or AccountCode. TaxAmount is required even when zero.\n"
-            "7. This server only prepares drafts: delivery is not available through it. Leave the invoice "
-            "undelivered (no DelivNote/delivnote=true) and deliver manually in Merit, where the user can "
-            "review it before sending.\n"
-            "8. Call merit_write_sales with action='sales_invoice_create' to preview the invoice creation.\n"
-            "9. After the user reviews that preview, call merit_write_sales_confirm with the same arguments, "
-            "the returned confirmation_code, and confirmed=true.\n"
-            "10. Validate the returned invoice identifiers and totals."
+            "4. Confirm the company's InvoiceNo convention; read invoices_list for context, but do not "
+            "assume the next integer is reserved or appropriate for every series.\n"
+            "5. Read items_list to choose existing non-stock items and taxes_list for TaxId GUIDs. "
+            "Do not create articles implicitly; missing or unknown items are refused.\n"
+            "6. Build the restricted payload: Customer={Id}; DocDate, TransactionDate, DueDate as YYYYMMDD; "
+            "InvoiceNo; CurrencyCode='EUR'; PriceInclVat=false; InvoiceRow; TaxAmount; TotalAmount. "
+            "Each row has Item={Code, Description, UOMName}, Quantity>0, Price>=0, TaxId, Account. "
+            "TotalAmount is the positive VAT-exclusive sum of per-row rounded amounts. "
+            "No Payment, AccountingDoc, DelivNote, negative rows, discounts, or item-creation fields.\n"
+            "7. Call merit_write_sales action='sales_invoice_create' for a non-writing preview.\n"
+            "8. Warn the user: confirmation creates a real, unsent accounting invoice that can affect "
+            "the ledger/reports BEFORE delivery. It is NOT an unposted draft; review before confirming.\n"
+            "9. After review, call merit_write_sales_confirm with the same arguments, returned "
+            "confirmation_code, and confirmed=true. Both calls are agent-accessible, not proof of human consent.\n"
+            "10. Check the resulting invoice in Merit. Delivery is manual and not exposed by this server."
+
         )
 
     @mcp.prompt(
